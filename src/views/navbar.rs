@@ -16,12 +16,12 @@ pub fn Navbar() -> Element {
         div {
             id: "navbar",
             Link {
-                to: Route::Home {},
+                to: Route::DomainsList {  },
                 "Domains"
             }
             Link {
-                to: Route::CreateProxy {},
-                "Create Proxy"
+                to: Route::TempProxies {  },
+                "Proxies"
             }
         }
 

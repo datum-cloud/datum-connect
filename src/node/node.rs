@@ -9,16 +9,10 @@ use std::{
     sync::Arc,
 };
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncWrite},
     select,
 };
 use tokio_util::sync::CancellationToken;
-
-#[cfg(unix)]
-use {
-    std::path::PathBuf,
-    tokio::net::{UnixListener, UnixStream},
-};
 
 /// The ALPN for dumbpipe.
 ///
@@ -42,7 +36,6 @@ impl Node {
         let cfg = CommonArgs {
             ipv4_addr: None,
             ipv6_addr: None,
-            verbose: 0,
         };
         let secret_key = get_or_create_secret()?;
         let endpoint = create_endpoint(secret_key, &cfg, vec![ALPN.to_vec()]).await?;
@@ -90,9 +83,6 @@ pub struct CommonArgs {
     /// If None, defaults to a random free port, but it can be useful to specify a fixed
     /// port, e.g. to configure a firewall rule.
     pub ipv6_addr: Option<SocketAddrV6>,
-
-    /// The verbosity level. Repeat to increase verbosity.
-    pub verbose: u8,
 }
 
 /// Copy from a reader to a quinn stream.

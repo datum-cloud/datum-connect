@@ -1,10 +1,13 @@
 use dioxus::prelude::*;
 
-use crate::components::{Domain, Domains};
+use crate::{
+    components::{Domain, Domains},
+    Route,
+};
 
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
-pub fn Home() -> Element {
+pub fn DomainsList() -> Element {
     let domains = vec![
         Domain {
             name: "example.com".to_string(),
@@ -22,5 +25,13 @@ pub fn Home() -> Element {
 
     rsx! {
         Domains { domains },
+        Link {
+            to: Route::Login {  },
+            "Login"
+        }
+        Link {
+            to: Route::Signup {  },
+            "Signup"
+        }
     }
 }

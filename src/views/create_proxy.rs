@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::{state::AppState, Route};
+use crate::state::AppState;
 
 /// The Blog page component that will be rendered when the current route is `[Route::Blog]`
 ///
@@ -29,7 +29,7 @@ pub fn CreateProxy() -> Element {
             input {
                 placeholder: "Port",
                 value: "5173",
-                onchange: move |e| {
+                onchange: move |_| {
                     // Handle input change event
                 }
             }

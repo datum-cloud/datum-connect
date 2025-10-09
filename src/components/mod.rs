@@ -5,4 +5,4 @@
 mod hero;
 
 mod domains;
-pub use domains::{Domain, DomainProps, Domains};
+pub use domains::{Domain, Domains};
