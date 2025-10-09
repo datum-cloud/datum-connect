@@ -62,12 +62,12 @@ impl Node {
         self.inner.ep_id.to_string()
     }
 
-    pub async fn listen_tcp(&self, args: ListenTcpArgs) -> Result<()> {
-        listen_tcp(&self.inner.endpoint, args).await
+    pub async fn listen_tcp(&self, host: String) -> Result<NodeTicket> {
+        listen_tcp(&self.inner.endpoint, host).await
     }
 
-    pub async fn connect_tcp(&self, args: ConnectTcpArgs) -> Result<()> {
-        connect_tcp(&self.inner.endpoint, args).await
+    pub async fn connect_tcp(&self, addr: String, ticket: NodeTicket) -> Result<()> {
+        connect_tcp(&self.inner.endpoint, addr, ticket).await
     }
 }
 
@@ -93,26 +93,6 @@ pub struct CommonArgs {
 
     /// The verbosity level. Repeat to increase verbosity.
     pub verbose: u8,
-}
-
-#[derive(Debug)]
-pub struct ListenTcpArgs {
-    pub host: String,
-
-    pub common: CommonArgs,
-}
-
-#[derive(Debug)]
-pub struct ConnectTcpArgs {
-    /// The addresses to listen on for incoming tcp connections.
-    ///
-    /// To listen on all network interfaces, use 0.0.0.0:12345
-    pub addr: String,
-
-    /// The node to connect to
-    pub ticket: NodeTicket,
-
-    pub common: CommonArgs,
 }
 
 /// Copy from a reader to a quinn stream.
@@ -237,11 +217,14 @@ async fn forward_bidi(
 }
 
 /// Listen on a tcp port and forward incoming connections to an endpoint.
-async fn connect_tcp(endpoint: &Endpoint, args: ConnectTcpArgs) -> Result<()> {
-    let addrs = args
-        .addr
+/// The addresses to listen on for incoming tcp connections.
+///
+/// To listen on all network interfaces, use 0.0.0.0:12345
+/// The node to connect to
+async fn connect_tcp(endpoint: &Endpoint, addr: String, ticket: NodeTicket) -> Result<()> {
+    let addrs = addr
         .to_socket_addrs()
-        .context(format!("invalid host string {}", args.addr))?;
+        .context(format!("invalid host string {}", addr))?;
     tracing::info!("tcp listening on {:?}", addrs);
 
     let tcp_listener = match tokio::net::TcpListener::bind(addrs.as_slice()).await {
@@ -280,7 +263,7 @@ async fn connect_tcp(endpoint: &Endpoint, args: ConnectTcpArgs) -> Result<()> {
         forward_bidi(tcp_recv, tcp_send, endpoint_recv, endpoint_send).await?;
         Ok::<_, n0_snafu::Error>(())
     }
-    let addr = args.ticket.node_addr();
+    let addr = ticket.node_addr();
     loop {
         // also wait for ctrl-c here so we can use it before accepting a connection
         let next = tokio::select! {
@@ -307,27 +290,25 @@ async fn connect_tcp(endpoint: &Endpoint, args: ConnectTcpArgs) -> Result<()> {
 }
 
 /// Listen on an endpoint and forward incoming connections to a tcp socket.
-async fn listen_tcp(endpoint: &Endpoint, args: ListenTcpArgs) -> Result<()> {
-    let addrs = match args.host.to_socket_addrs() {
+async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<NodeTicket> {
+    let addrs = match host.to_socket_addrs() {
         Ok(addrs) => addrs.collect::<Vec<_>>(),
-        Err(e) => snafu::whatever!("invalid host string {}: {}", args.host, e),
+        Err(e) => snafu::whatever!("invalid host string {}: {}", host, e),
     };
 
     let node_addr = endpoint.node_addr().initialized().await;
     let mut short = node_addr.clone();
-    let ticket = NodeTicket::new(node_addr);
+    // let ticket = NodeTicket::new(node_addr);
     short.direct_addresses.clear();
-    let short = NodeTicket::new(short);
+    let ticket = NodeTicket::new(short);
 
     // print the ticket on stderr so it doesn't interfere with the data itself
     //
     // note that the tests rely on the ticket being the last thing printed
-    eprintln!("Forwarding incoming requests to '{}'.", args.host);
+    eprintln!("Forwarding incoming requests to '{}'.", host);
     eprintln!("To connect, use e.g.:");
     eprintln!("dumbpipe connect-tcp {ticket}");
-    if args.common.verbose > 0 {
-        eprintln!("or:\ndumbpipe connect-tcp {short}");
-    }
+    eprintln!("or:\ndumbpipe connect-tcp {ticket}");
     tracing::info!("node id is {}", ticket.node_addr().node_id);
     tracing::info!("derp url is {:?}", ticket.node_addr().relay_url);
 
@@ -359,30 +340,34 @@ async fn listen_tcp(endpoint: &Endpoint, args: ListenTcpArgs) -> Result<()> {
         Ok(())
     }
 
-    loop {
-        let incoming = select! {
-            incoming = endpoint.accept() => incoming,
-            _ = tokio::signal::ctrl_c() => {
-                eprintln!("got ctrl-c, exiting");
+    let endpoint = endpoint.clone();
+    tokio::spawn(async move {
+        loop {
+            let incoming = select! {
+                incoming = endpoint.accept() => incoming,
+                _ = tokio::signal::ctrl_c() => {
+                    eprintln!("got ctrl-c, exiting");
+                    break;
+                }
+            };
+            let Some(incoming) = incoming else {
                 break;
-            }
-        };
-        let Some(incoming) = incoming else {
-            break;
-        };
-        let Ok(connecting) = incoming.accept() else {
-            break;
-        };
-        let addrs = addrs.clone();
-        let handshake = true;
-        tokio::spawn(async move {
-            if let Err(cause) = handle_endpoint_accept(connecting, addrs, handshake).await {
-                // log error at warn level
-                //
-                // we should know about it, but it's not fatal
-                tracing::warn!("error handling connection: {}", cause);
-            }
-        });
-    }
-    Ok(())
+            };
+            let Ok(connecting) = incoming.accept() else {
+                break;
+            };
+            let addrs = addrs.clone();
+            let handshake = true;
+            tokio::spawn(async move {
+                if let Err(cause) = handle_endpoint_accept(connecting, addrs, handshake).await {
+                    // log error at warn level
+                    //
+                    // we should know about it, but it's not fatal
+                    tracing::warn!("error handling connection: {}", cause);
+                }
+            });
+        }
+    });
+
+    Ok(ticket)
 }

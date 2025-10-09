@@ -1,8 +1,4 @@
-#blog {
-  margin-top: 50px;
-}
-
-#blog a {
-  color: #ffffff;
-  margin-top: 50px;
+#ticket-container p {
+    max-width: 450px;
+    overflow-wrap: break-word;
 }

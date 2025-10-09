@@ -56,6 +56,17 @@ fn main() {
 /// Components should be annotated with `#[component]` to support props, better error messages, and autocomplete
 #[component]
 fn App() -> Element {
+    let mut app_state_ready = use_signal(|| false);
+    use_future(move || async move {
+        let state = AppState::load().await.unwrap();
+        provide_context(state);
+        app_state_ready.set(true);
+    });
+
+    if !app_state_ready() {
+        return rsx! { "loading..." };
+    }
+
     // The `rsx!` macro lets us define HTML inside of rust. It expands to an Element with all of our HTML inside.
     rsx! {
         // In addition to element and text (which we will see later), rsx can contain other components. In this case,

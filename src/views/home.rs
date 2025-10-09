@@ -1,9 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::{
-    components::{Domain, DomainProps, Domains},
-    state::AppState,
-};
+use crate::components::{Domain, Domains};
 
 /// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]

@@ -3,7 +3,6 @@
 //! component  to be used in our app.
 
 mod hero;
-pub use hero::Hero;
 
 mod domains;
 pub use domains::{Domain, DomainProps, Domains};

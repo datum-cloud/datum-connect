@@ -1,8 +1,6 @@
 use crate::{state::AppState, Route};
 use dioxus::prelude::*;
 
-const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
-
 /// The Navbar component that will be rendered on all pages of our app since every page is under the layout.
 ///
 ///
@@ -10,26 +8,16 @@ const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
 /// routes will be rendered under the outlet inside this component
 #[component]
 pub fn Navbar() -> Element {
-    let state = use_resource(move || async move { AppState::new().await.unwrap() });
+    let state = consume_context::<AppState>();
+    let id = state.node().endpoint_id();
 
     rsx! {
-        document::Link { rel: "stylesheet", href: NAVBAR_CSS }
-
-        match &*state.read() {
-            Some(state) => {
-                let id = state.node().endpoint_id();
-                rsx! {
-                    h5 { "endpoint_id: {id}" }
-                }
-            }
-            None => rsx! {"Loading..."},
-        }
-
+        h5 { class: "text-xl text-gray-800", "endpoint_id: {id}" },
         div {
             id: "navbar",
             Link {
                 to: Route::Home {},
-                "Home"
+                "Domains"
             }
             Link {
                 to: Route::CreateProxy {},

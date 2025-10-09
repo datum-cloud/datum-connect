@@ -1,5 +1,3 @@
-use n0_snafu::ResultExt;
-
 use crate::node::Node;
 
 #[derive(Debug, Clone)]
@@ -8,7 +6,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn new() -> anyhow::Result<Self> {
+    pub async fn load() -> anyhow::Result<Self> {
         // TODO - fml.
         let node = Node::new().await.unwrap();
         Ok(AppState { node })
