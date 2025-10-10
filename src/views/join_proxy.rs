@@ -11,16 +11,38 @@ use crate::state::AppState;
 /// re-run and the rendered HTML will be updated.
 #[component]
 pub fn JoinProxy() -> Element {
+    let mut local_address = use_signal(|| "localhost:9000".to_string());
+    let mut ticket_str = use_signal(|| "".to_string());
+    let mut validation_error = use_signal(|| "".to_string());
+
     rsx! {
         div {
             id: "create-domain",
-            h1 { "TODO: join proxy" }
+            h1 { "join proxy" },
+            p {
+                class: "text-red-500",
+                "{validation_error}"
+            }
+            input {
+                value: "{local_address}",
+                onchange: move |e| local_address.set(e.value()),
+            }
+            textarea {
+                value: "{ticket_str}",
+                onchange: move |e| ticket_str.set(e.value()),
+            },
             button {
                 class: "cursor-pointer",
                 onclick: move |_| async move {
                     let state = consume_context::<AppState>();
-                    let ticket = NodeTicket::from_str("example_ticket").unwrap();
-                    state.clone().node().connect_tcp("localhost:5173".to_string(), ticket).await.unwrap();
+                    let ticket = match NodeTicket::from_str(&ticket_str()) {
+                        Ok(ticket) => ticket,
+                        Err(err) => {
+                            validation_error.set(format!("Invalid ticket: {}", err));
+                            return;
+                        }
+                    };
+                    state.clone().node().connect_tcp(local_address(), ticket).await.unwrap();
                 },
                 "Join"
             }

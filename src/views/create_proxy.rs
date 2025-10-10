@@ -8,15 +8,12 @@ use crate::state::AppState;
 /// re-run and the rendered HTML will be updated.
 #[component]
 pub fn CreateProxy() -> Element {
+    let mut port = use_signal(|| "localhost:5173".to_string());
     let mut ticket = use_signal(|| "Click to generate a ticket".to_string());
 
     rsx! {
         div {
             id: "create-proxy",
-            div {
-                id: "ticket-container",
-                p { "{ticket}" },
-            }
             // h4 { "domain" },
             // input {
             //     placeholder: "Domain Name",
@@ -28,19 +25,23 @@ pub fn CreateProxy() -> Element {
             h4 { "local port to forward" },
             input {
                 placeholder: "Port",
-                value: "5173",
-                onchange: move |_| {
-                    // Handle input change event
+                value: "{port}",
+                onchange: move |e| {
+                    port.set(e.value());
                 }
             }
             button {
                 class: "cursor-pointer",
                 onclick: move |_| async move {
                     let state = consume_context::<AppState>();
-                    let tkt = state.clone().node().listen_tcp("localhost:5173".to_string()).await.unwrap();
+                    let tkt = state.clone().node().listen_tcp(port()).await.unwrap();
                     ticket.set(tkt.to_string())
                 },
                 "Create"
+            }
+            div {
+                id: "ticket-container",
+                p { "{ticket}" },
             }
         }
     }

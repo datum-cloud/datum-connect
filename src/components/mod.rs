@@ -5,4 +5,9 @@
 mod hero;
 
 mod domains;
+mod head;
+mod splash;
+
 pub use domains::{Domain, Domains};
+pub use head::Head;
+pub use splash::Splash;
