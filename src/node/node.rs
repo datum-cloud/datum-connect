@@ -82,8 +82,8 @@ impl Node {
             .collect()
     }
 
-    pub async fn listen_tcp(&self, host: String) -> Result<NodeTicket> {
-        let listener = listen_tcp(&self.inner.endpoint, host).await?;
+    pub async fn listen_tcp(&self, label: String, host: String) -> Result<NodeTicket> {
+        let listener = listen_tcp(&self.inner.endpoint, label, host).await?;
         let ticket = listener.ticket.clone();
         let mut tcp_listeners = self.inner.tcp_listeners.lock().await;
         tcp_listeners.push(listener);
@@ -109,8 +109,8 @@ impl Node {
         }
     }
 
-    pub async fn connect_tcp(&self, addr: String, ticket: NodeTicket) -> Result<()> {
-        let conn = connect_tcp(&self.inner.endpoint, addr, ticket).await?;
+    pub async fn connect_tcp(&self, label: String, addr: String, ticket: NodeTicket) -> Result<()> {
+        let conn = connect_tcp(&self.inner.endpoint, label, addr, ticket).await?;
         let mut tcp_connections = self.inner.tcp_connections.lock().await;
         tcp_connections.push(conn);
         Ok(())
@@ -283,6 +283,7 @@ async fn forward_bidi(
 #[derive(Debug, Clone, PartialEq)]
 pub struct TcpConnection {
     pub id: Uuid,
+    pub label: String,
     pub addr: String,
     pub ticket: NodeTicket,
 }
@@ -291,6 +292,7 @@ impl From<&TcpConnectionHandle> for TcpConnection {
     fn from(handle: &TcpConnectionHandle) -> Self {
         TcpConnection {
             id: handle.id.clone(),
+            label: handle.label.clone(),
             addr: handle.addr.clone(),
             ticket: handle.ticket.clone(),
         }
@@ -300,6 +302,7 @@ impl From<&TcpConnectionHandle> for TcpConnection {
 #[derive(Debug)]
 pub struct TcpConnectionHandle {
     id: Uuid,
+    label: String,
     addr: String,
     ticket: NodeTicket,
     handle: tokio::task::JoinHandle<()>,
@@ -312,6 +315,7 @@ pub struct TcpConnectionHandle {
 /// The node to connect to
 async fn connect_tcp(
     endpoint: &Endpoint,
+    label: String,
     addr: String,
     ticket: NodeTicket,
 ) -> Result<TcpConnectionHandle> {
@@ -387,6 +391,7 @@ async fn connect_tcp(
     });
     Ok(TcpConnectionHandle {
         id: Uuid::new_v4(),
+        label,
         addr: addr_string,
         ticket,
         handle,
@@ -396,6 +401,7 @@ async fn connect_tcp(
 #[derive(Debug, Clone, PartialEq)]
 pub struct TcpListener {
     pub id: Uuid,
+    pub label: String,
     pub addr: String,
     pub ticket: NodeTicket,
 }
@@ -404,6 +410,7 @@ impl From<&TcpListenerHandle> for TcpListener {
     fn from(handle: &TcpListenerHandle) -> Self {
         TcpListener {
             id: handle.id.clone(),
+            label: handle.label.clone(),
             addr: handle.addr.clone(),
             ticket: handle.ticket.clone(),
         }
@@ -413,13 +420,14 @@ impl From<&TcpListenerHandle> for TcpListener {
 #[derive(Debug)]
 pub struct TcpListenerHandle {
     id: Uuid,
+    pub label: String,
     pub addr: String,
     pub ticket: NodeTicket,
     pub handle: tokio::task::JoinHandle<()>,
 }
 
 /// Listen on an endpoint and forward incoming connections to a tcp socket.
-async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<TcpListenerHandle> {
+async fn listen_tcp(endpoint: &Endpoint, label: String, host: String) -> Result<TcpListenerHandle> {
     let addrs = match host.to_socket_addrs() {
         Ok(addrs) => addrs.collect::<Vec<_>>(),
         Err(e) => snafu::whatever!("invalid host string {}: {}", host, e),
@@ -500,6 +508,7 @@ async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<TcpListenerHand
 
     Ok(TcpListenerHandle {
         id: Uuid::new_v4(),
+        label,
         addr: host,
         ticket,
         handle,

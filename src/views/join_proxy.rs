@@ -12,6 +12,7 @@ use crate::state::AppState;
 #[component]
 pub fn JoinProxy() -> Element {
     let mut local_address = use_signal(|| "localhost:9000".to_string());
+    let mut label = use_signal(|| "".to_string());
     let mut ticket_str = use_signal(|| "".to_string());
     let mut validation_error = use_signal(|| "".to_string());
 
@@ -26,6 +27,12 @@ pub fn JoinProxy() -> Element {
             input {
                 value: "{local_address}",
                 onchange: move |e| local_address.set(e.value()),
+            }
+            input {
+                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
+                placeholder: "Label",
+                value: "{label}",
+                onchange: move |e| label.set(e.value()),
             }
             textarea {
                 value: "{ticket_str}",
@@ -42,7 +49,7 @@ pub fn JoinProxy() -> Element {
                             return;
                         }
                     };
-                    state.clone().node().connect_tcp(local_address(), ticket).await.unwrap();
+                    state.clone().node().connect_tcp(label(), local_address(), ticket).await.unwrap();
                 },
                 "Join"
             }

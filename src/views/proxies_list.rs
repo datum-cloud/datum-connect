@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
 
 use crate::{
+    components::{Button, CloseButton, Subhead},
     node::{TcpConnection, TcpListener},
     state::AppState,
     Route,
 };
 
-/// The Home page component that will be rendered when the current route is `[Route::Home]`
 #[component]
 pub fn TempProxies() -> Element {
     let mut connections = use_signal(|| Vec::new());
@@ -21,45 +21,71 @@ pub fn TempProxies() -> Element {
     });
 
     rsx! {
-        h3{ "Connections" }
-        Link {
-            to: Route::JoinProxy {  },
-            "Join Proxy"
+        div {
+            class: "my-5",
+            div {
+                class: "flex",
+                Subhead { text: "Connections" }
+                div { class: "flex-grow" }
+                Button {
+                    to: Some(Route::JoinProxy {  }),
+                    text: "Join Proxy"
+                }
+            }
+            for conn in connections() {
+                ProxyConnectionItem { conn, connections }
+            }
+
         }
-        for conn in connections() {
-            ProxyConnectionItem { conn, connections }
-        }
-        h3{ "Listeners" }
-        Link {
-            to: Route::CreateProxy {  },
-            "Create Proxy"
-        }
-        for lstn in listeners() {
-            ProxyListenerItem { lstn, listeners }
+        div {
+            class: "my-5",
+            div {
+                class: "flex",
+                Subhead { text: "Listeners" }
+                div { class: "flex-grow" }
+                Button {
+                    to: Some(Route::CreateProxy {  }),
+                    text: "Create Proxy"
+                }
+            }
+            for lstn in listeners() {
+                ProxyListenerItem { lstn, listeners }
+            }
         }
     }
 }
 
 #[component]
 fn ProxyConnectionItem(conn: TcpConnection, connections: Signal<Vec<TcpConnection>>) -> Element {
+    let conn_2 = conn.clone();
     rsx! {
         div {
-            h2 { "Proxy Connection" }
-            p { "Status: active" }
-            p { "Address: {conn.addr}" }
-            button {
-                onclick: move |_| {
-                    let conn_2 = conn.clone();
-                    async move {
-                        let state = consume_context::<AppState>();
-                        // TODO(b5) - remove unwrap
-                        let node = state.node();
-                        node.disconnect_tcp(&conn_2).await.unwrap();
-                        let conns = node.connections().await;
-                        connections.set(conns);
-                    }
-                },
-                "Disconnect"
+            div {
+                class: "flex mt-8",
+                h3 {
+                    class: "text-xl flex-grow",
+                    "{conn.label}"
+                }
+                CloseButton{
+                    onclick: move |_| {
+                        let conn_2 = conn.clone();
+                        async move {
+                            let state = consume_context::<AppState>();
+                            let node = state.node();
+                            // TODO(b5) - remove unwrap
+                            node.disconnect_tcp(&conn_2).await.unwrap();
+
+                            // refresh list of connections
+                            let conns = node.connections().await;
+                            connections.set(conns);
+                        }
+                    },
+                }
+            }
+            Subhead { text: "{conn_2.addr}" }
+            p {
+                class: "text-sm break-all max-w-2/3 mt-1",
+                "{conn_2.ticket}"
             }
         }
     }
@@ -67,25 +93,35 @@ fn ProxyConnectionItem(conn: TcpConnection, connections: Signal<Vec<TcpConnectio
 
 #[component]
 fn ProxyListenerItem(lstn: TcpListener, listeners: Signal<Vec<TcpListener>>) -> Element {
+    let lstn_2 = lstn.clone();
     rsx! {
         div {
-            h2 { "Proxy Listener" }
-            p { "Status: active" }
-            p { "Address: {lstn.addr}" }
-            p { "Ticket: {lstn.ticket}" },
-            button {
-                onclick: move |_| {
-                    let lstn_2 = lstn.clone();
-                    async move {
-                        let state = consume_context::<AppState>();
-                        let node = state.node();
-                        // TODO(b5) - remove unwrap
-                        node.unlisten_tcp(&lstn_2).await.unwrap();
-                        let lstns = node.listeners().await;
-                        listeners.set(lstns);
-                    }
-                },
-                "Disconnect"
+            div {
+                class: "flex mt-8",
+                h3 {
+                    class: "text-xl flex-grow",
+                    "{lstn.label}"
+                }
+                CloseButton{
+                    onclick: move |_| {
+                        let lstn_2 = lstn.clone();
+                        async move {
+                            let state = consume_context::<AppState>();
+                            let node = state.node();
+                            // TODO(b5) - remove unwrap
+                            node.unlisten_tcp(&lstn_2).await.unwrap();
+
+                            // refresh list of listeners
+                            let lstns = node.listeners().await;
+                            listeners.set(lstns);
+                        }
+                    },
+                }
+            }
+            Subhead { text: "{lstn_2.addr}" }
+            p {
+                class: "text-sm break-all max-w-2/3 mt-1",
+                "{lstn_2.ticket}"
             }
         }
     }

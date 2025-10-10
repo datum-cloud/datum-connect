@@ -12,21 +12,30 @@ pub fn Navbar() -> Element {
     let id = state.node().endpoint_id();
 
     rsx! {
-        h5 { class: "text-xl text-gray-800", "endpoint_id: {id}" },
         div {
-            id: "navbar",
-            Link {
-                to: Route::DomainsList {  },
-                "Domains"
-            }
-            Link {
-                to: Route::TempProxies {  },
-                "Proxies"
+            class: "flex flex-col p-5",
+            div {
+                id: "navbar",
+                class: "flex gap-8 border-b border-gray-500 pb-5 mb-5",
+                Link {
+                    class: "hover:text-gray-700 text-lg cursor-pointer",
+                    to: Route::TempProxies {  },
+                    "Proxies"
+                }
+                Link {
+                    class: "hover:text-gray-700 text-lg cursor-pointer",
+                    to: Route::DomainsList {  },
+                    "Domains"
+                }
+            },
+            div {
+                class: "flex-1 h-full",
+                Outlet::<Route> {}
+            },
+            div {
+                class: "fixed bottom-0 left-0 right-0 px-5 py-2",
+                h5 { class: "text-sm text-gray-800", "endpoint_id: {id}" },
             }
         }
-
-        // The `Outlet` component is used to render the next component inside the layout. In this case, it will render either
-        // the [`Home`] or [`Blog`] component depending on the current route.
-        Outlet::<Route> {}
     }
 }

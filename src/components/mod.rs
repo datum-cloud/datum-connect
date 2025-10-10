@@ -4,10 +4,14 @@
 
 mod hero;
 
+mod button;
 mod domains;
 mod head;
 mod splash;
+mod typography;
 
+pub use button::{Button, CloseButton};
 pub use domains::{Domain, Domains};
 pub use head::Head;
 pub use splash::Splash;
+pub use typography::Subhead;

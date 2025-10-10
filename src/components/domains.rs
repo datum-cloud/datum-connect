@@ -1,5 +1,10 @@
 use dioxus::prelude::*;
 
+use crate::{
+    components::{Button, Subhead},
+    Route,
+};
+
 #[derive(Props, PartialEq, Clone)]
 pub struct DomainProps {
     pub domains: Vec<Domain>,
@@ -16,13 +21,28 @@ pub fn Domains(domains: Vec<Domain>) -> Element {
     rsx! {
         div {
             id: "domains",
-            h1 { class: "bg-red-500 text-red-500", "Domains" },
-            for domain in domains {
-                div {
-                    h2 { "{domain.name}" }
-                    a { class: "text-green-500", href: "{domain.url}", "{domain.url}" }
+            div {
+                class: "flex",
+                Subhead { text: "Domains" },
+                div { class: "flex-grow" },
+                Button{ to: Route::CreateProxy {  }, text: "Create Proxy" },
+            }
+            div {
+                class: "flex flex-col space-y-4",
+                for domain in domains {
+                    DomainItem { domain }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn DomainItem(domain: Domain) -> Element {
+    rsx! {
+        div {
+            h2 { "{domain.name}" }
+            a { class: "text-green-500", href: "{domain.url}", "{domain.url}" }
         }
     }
 }

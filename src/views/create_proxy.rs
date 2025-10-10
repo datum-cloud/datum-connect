@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::state::AppState;
+use crate::{
+    components::{Button, Subhead},
+    state::AppState,
+};
 
 /// The Blog page component that will be rendered when the current route is `[Route::Blog]`
 ///
@@ -9,39 +12,47 @@ use crate::state::AppState;
 #[component]
 pub fn CreateProxy() -> Element {
     let mut port = use_signal(|| "localhost:5173".to_string());
-    let mut ticket = use_signal(|| "Click to generate a ticket".to_string());
+    let mut label = use_signal(|| "".to_string());
+    let mut ticket = use_signal(|| "".to_string());
 
     rsx! {
         div {
             id: "create-proxy",
-            // h4 { "domain" },
-            // input {
-            //     placeholder: "Domain Name",
-            //     value: "example.com",
-            //     onchange: move |e| {
-            //         // Handle input change event
-            //     }
-            // },
-            h4 { "local port to forward" },
+            h1 { "Create Proxy" },
+            Subhead { text: "local port to forward" },
             input {
+                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
                 placeholder: "Port",
                 value: "{port}",
                 onchange: move |e| {
                     port.set(e.value());
                 }
             }
-            button {
-                class: "cursor-pointer",
+            Subhead { text: "label" },
+            input {
+                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
+                placeholder: "Label",
+                value: "{label}",
+                onchange: move |e| {
+                    label.set(e.value());
+                }
+            }
+            Button {
                 onclick: move |_| async move {
                     let state = consume_context::<AppState>();
-                    let tkt = state.clone().node().listen_tcp(port()).await.unwrap();
+                    let tkt = state.clone().node().listen_tcp(label(), port()).await.unwrap();
                     ticket.set(tkt.to_string())
                 },
-                "Create"
+                text: "Create"
             }
             div {
                 id: "ticket-container",
-                p { "{ticket}" },
+                class: "my-5",
+                Subhead { text: "Ticket" },
+                p {
+                    class: "max-w-5/10 break-all",
+                    "{ticket}"
+                },
             }
         }
     }
