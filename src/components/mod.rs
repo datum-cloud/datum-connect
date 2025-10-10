@@ -11,7 +11,7 @@ mod splash;
 mod typography;
 
 pub use button::{Button, CloseButton};
-pub use domains::{Domain, Domains};
+pub use domains::Domains;
 pub use head::Head;
 pub use splash::Splash;
 pub use typography::Subhead;

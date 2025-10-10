@@ -18,16 +18,10 @@ pub fn CreateProxy() -> Element {
     rsx! {
         div {
             id: "create-proxy",
-            h1 { "Create Proxy" },
-            Subhead { text: "local port to forward" },
-            input {
-                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
-                placeholder: "Port",
-                value: "{port}",
-                onchange: move |e| {
-                    port.set(e.value());
-                }
-            }
+            h1 {
+                class: "text-xl font-bold mb-10",
+                "Create Proxy"
+            },
             Subhead { text: "label" },
             input {
                 class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
@@ -37,6 +31,16 @@ pub fn CreateProxy() -> Element {
                     label.set(e.value());
                 }
             }
+            Subhead { text: "local port to forward" },
+            input {
+                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
+                placeholder: "Port",
+                value: "{port}",
+                onchange: move |e| {
+                    port.set(e.value());
+                }
+            }
+
             Button {
                 onclick: move |_| async move {
                     let state = consume_context::<AppState>();

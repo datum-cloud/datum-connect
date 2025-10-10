@@ -3,7 +3,7 @@ use std::str::FromStr;
 use dioxus::prelude::*;
 use iroh_base::ticket::NodeTicket;
 
-use crate::state::AppState;
+use crate::{components::Subhead, state::AppState};
 
 /// The Blog page component that will be rendered when the current route is `[Route::Blog]`
 ///
@@ -19,22 +19,28 @@ pub fn JoinProxy() -> Element {
     rsx! {
         div {
             id: "create-domain",
+            class: "flex flex-col",
             h1 { "join proxy" },
             p {
                 class: "text-red-500",
                 "{validation_error}"
             }
+            Subhead { text: "Local Address" }
             input {
+                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
                 value: "{local_address}",
                 onchange: move |e| local_address.set(e.value()),
             }
+            Subhead { text: "Label" }
             input {
                 class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
                 placeholder: "Label",
                 value: "{label}",
                 onchange: move |e| label.set(e.value()),
             }
+            Subhead { text: "Ticket" }
             textarea {
+                class: "border border-gray-300 rounded-md px-3 py-2 my-1 mr-4",
                 value: "{ticket_str}",
                 onchange: move |e| ticket_str.set(e.value()),
             },
