@@ -21,6 +21,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 data-encoding = "2.9.0"
 n0-snafu = "0.2.2"
+uuid = { version = "1.18.1", features = ["v4"] }
 
 [features]
 default = ["desktop"]

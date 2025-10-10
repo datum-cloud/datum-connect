@@ -1,7 +1,9 @@
 //! Command line arguments.
+use anyhow::anyhow;
 use iroh::{endpoint::Connecting, Endpoint, NodeAddr, PublicKey, SecretKey, Watcher};
 pub use iroh_base::ticket::NodeTicket;
 use n0_snafu::{Result, ResultExt};
+use snafu::whatever;
 use std::{
     io,
     net::{SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs},
@@ -11,8 +13,11 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     select,
+    sync::Mutex,
 };
 use tokio_util::sync::CancellationToken;
+use tracing::debug;
+use uuid::Uuid;
 
 /// The ALPN for dumbpipe.
 ///
@@ -47,6 +52,8 @@ impl Node {
             inner: Arc::new(NodeInner {
                 ep_id: node_addr.node_id,
                 endpoint,
+                tcp_listeners: Mutex::new(Vec::new()),
+                tcp_connections: Mutex::new(Vec::new()),
             }),
         })
     }
@@ -55,12 +62,77 @@ impl Node {
         self.inner.ep_id.to_string()
     }
 
+    pub async fn listeners(&self) -> Vec<TcpListener> {
+        self.inner
+            .tcp_listeners
+            .lock()
+            .await
+            .iter()
+            .map(TcpListener::from)
+            .collect()
+    }
+
+    pub async fn connections(&self) -> Vec<TcpConnection> {
+        self.inner
+            .tcp_connections
+            .lock()
+            .await
+            .iter()
+            .map(TcpConnection::from)
+            .collect()
+    }
+
     pub async fn listen_tcp(&self, host: String) -> Result<NodeTicket> {
-        listen_tcp(&self.inner.endpoint, host).await
+        let listener = listen_tcp(&self.inner.endpoint, host).await?;
+        let ticket = listener.ticket.clone();
+        let mut tcp_listeners = self.inner.tcp_listeners.lock().await;
+        tcp_listeners.push(listener);
+        Ok(ticket)
+    }
+
+    pub async fn unlisten_tcp(&self, lstn: &TcpListener) -> anyhow::Result<()> {
+        let mut lstrs = self.inner.tcp_listeners.lock().await;
+        let mut found = false;
+        debug!("unlisten tcp. id: {:?}", lstn.id);
+        lstrs.retain(|h| {
+            if h.id == lstn.id {
+                h.handle.abort();
+                found = true;
+                false
+            } else {
+                true
+            }
+        });
+        match found {
+            true => Ok(()),
+            false => Err(anyhow!("TCP listener not found")),
+        }
     }
 
     pub async fn connect_tcp(&self, addr: String, ticket: NodeTicket) -> Result<()> {
-        connect_tcp(&self.inner.endpoint, addr, ticket).await
+        let conn = connect_tcp(&self.inner.endpoint, addr, ticket).await?;
+        let mut tcp_connections = self.inner.tcp_connections.lock().await;
+        tcp_connections.push(conn);
+        Ok(())
+    }
+
+    pub async fn disconnect_tcp(&self, conn: &TcpConnection) -> anyhow::Result<()> {
+        let mut conns = self.inner.tcp_connections.lock().await;
+        let mut found = false;
+        debug!("disconnect tcp. id: {:?}", conn.id);
+        conns.retain(|h| {
+            if h.id == conn.id {
+                h.handle.abort();
+                found = true;
+                false
+            } else {
+                true
+            }
+        });
+        match found {
+            true => Ok(()),
+            false => Err(anyhow!("TCP connection not found")),
+        }
     }
 }
 
@@ -68,6 +140,8 @@ impl Node {
 struct NodeInner {
     ep_id: PublicKey,
     endpoint: Endpoint,
+    tcp_listeners: Mutex<Vec<TcpListenerHandle>>,
+    tcp_connections: Mutex<Vec<TcpConnectionHandle>>,
 }
 
 #[derive(Debug)]
@@ -206,12 +280,42 @@ async fn forward_bidi(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct TcpConnection {
+    pub id: Uuid,
+    pub addr: String,
+    pub ticket: NodeTicket,
+}
+
+impl From<&TcpConnectionHandle> for TcpConnection {
+    fn from(handle: &TcpConnectionHandle) -> Self {
+        TcpConnection {
+            id: handle.id.clone(),
+            addr: handle.addr.clone(),
+            ticket: handle.ticket.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TcpConnectionHandle {
+    id: Uuid,
+    addr: String,
+    ticket: NodeTicket,
+    handle: tokio::task::JoinHandle<()>,
+}
+
 /// Listen on a tcp port and forward incoming connections to an endpoint.
 /// The addresses to listen on for incoming tcp connections.
 ///
 /// To listen on all network interfaces, use 0.0.0.0:12345
 /// The node to connect to
-async fn connect_tcp(endpoint: &Endpoint, addr: String, ticket: NodeTicket) -> Result<()> {
+async fn connect_tcp(
+    endpoint: &Endpoint,
+    addr: String,
+    ticket: NodeTicket,
+) -> Result<TcpConnectionHandle> {
+    let addr_string = addr.clone();
     let addrs = addr
         .to_socket_addrs()
         .context(format!("invalid host string {}", addr))?;
@@ -221,7 +325,7 @@ async fn connect_tcp(endpoint: &Endpoint, addr: String, ticket: NodeTicket) -> R
         Ok(tcp_listener) => tcp_listener,
         Err(cause) => {
             tracing::error!("error binding tcp socket to {:?}: {}", addrs, cause);
-            return Ok(());
+            whatever!("error binding tcp socket to {:?}: {}", addrs, cause);
         }
     };
     async fn handle_tcp_accept(
@@ -253,34 +357,69 @@ async fn connect_tcp(endpoint: &Endpoint, addr: String, ticket: NodeTicket) -> R
         forward_bidi(tcp_recv, tcp_send, endpoint_recv, endpoint_send).await?;
         Ok::<_, n0_snafu::Error>(())
     }
-    let addr = ticket.node_addr();
-    loop {
-        // also wait for ctrl-c here so we can use it before accepting a connection
-        let next = tokio::select! {
-            stream = tcp_listener.accept() => stream,
-            _ = tokio::signal::ctrl_c() => {
-                eprintln!("got ctrl-c, exiting");
-                break;
-            }
-        };
-        let endpoint = endpoint.clone();
-        let addr = addr.clone();
-        let handshake = true;
-        let alpn = ALPN;
-        tokio::spawn(async move {
-            if let Err(cause) = handle_tcp_accept(next, addr, endpoint, handshake, &alpn).await {
-                // log error at warn level
-                //
-                // we should know about it, but it's not fatal
-                tracing::warn!("error handling connection: {}", cause);
-            }
-        });
+    let ticket2 = ticket.clone();
+    let addr = ticket2.node_addr().clone();
+    let endpoint = endpoint.clone();
+    let handle = tokio::spawn(async move {
+        loop {
+            // also wait for ctrl-c here so we can use it before accepting a connection
+            let next = tokio::select! {
+                stream = tcp_listener.accept() => stream,
+                _ = tokio::signal::ctrl_c() => {
+                    eprintln!("got ctrl-c, exiting");
+                    break;
+                }
+            };
+            let endpoint = endpoint.clone();
+            let addr = addr.clone();
+            let handshake = true;
+            let alpn = ALPN;
+            tokio::spawn(async move {
+                if let Err(cause) = handle_tcp_accept(next, addr, endpoint, handshake, &alpn).await
+                {
+                    // log error at warn level
+                    //
+                    // we should know about it, but it's not fatal
+                    tracing::warn!("error handling connection: {}", cause);
+                }
+            });
+        }
+    });
+    Ok(TcpConnectionHandle {
+        id: Uuid::new_v4(),
+        addr: addr_string,
+        ticket,
+        handle,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TcpListener {
+    pub id: Uuid,
+    pub addr: String,
+    pub ticket: NodeTicket,
+}
+
+impl From<&TcpListenerHandle> for TcpListener {
+    fn from(handle: &TcpListenerHandle) -> Self {
+        TcpListener {
+            id: handle.id.clone(),
+            addr: handle.addr.clone(),
+            ticket: handle.ticket.clone(),
+        }
     }
-    Ok(())
+}
+
+#[derive(Debug)]
+pub struct TcpListenerHandle {
+    id: Uuid,
+    pub addr: String,
+    pub ticket: NodeTicket,
+    pub handle: tokio::task::JoinHandle<()>,
 }
 
 /// Listen on an endpoint and forward incoming connections to a tcp socket.
-async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<NodeTicket> {
+async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<TcpListenerHandle> {
     let addrs = match host.to_socket_addrs() {
         Ok(addrs) => addrs.collect::<Vec<_>>(),
         Err(e) => snafu::whatever!("invalid host string {}: {}", host, e),
@@ -331,7 +470,7 @@ async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<NodeTicket> {
     }
 
     let endpoint = endpoint.clone();
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         loop {
             let incoming = select! {
                 incoming = endpoint.accept() => incoming,
@@ -359,5 +498,10 @@ async fn listen_tcp(endpoint: &Endpoint, host: String) -> Result<NodeTicket> {
         }
     });
 
-    Ok(ticket)
+    Ok(TcpListenerHandle {
+        id: Uuid::new_v4(),
+        addr: host,
+        ticket,
+        handle,
+    })
 }
