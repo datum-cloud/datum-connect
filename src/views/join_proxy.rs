@@ -11,7 +11,7 @@ use crate::{components::Subhead, state::AppState};
 /// re-run and the rendered HTML will be updated.
 #[component]
 pub fn JoinProxy() -> Element {
-    let mut local_address = use_signal(|| "localhost:9000".to_string());
+    let mut local_address = use_signal(|| "127.0.0.1:9000".to_string());
     let mut label = use_signal(|| "".to_string());
     let mut ticket_str = use_signal(|| "".to_string());
     let mut validation_error = use_signal(|| "".to_string());

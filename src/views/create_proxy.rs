@@ -11,7 +11,7 @@ use crate::{
 /// re-run and the rendered HTML will be updated.
 #[component]
 pub fn CreateProxy() -> Element {
-    let mut port = use_signal(|| "localhost:5173".to_string());
+    let mut port = use_signal(|| "127.0.0.1:5173".to_string());
     let mut label = use_signal(|| "".to_string());
     let mut ticket = use_signal(|| "".to_string());
 
