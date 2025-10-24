@@ -11,7 +11,7 @@ pub struct Repo(PathBuf);
 
 impl Repo {
     const KEY_FILE: &str = "key";
-    const CONFIG_FILE: &str = "config.toml";
+    const CONFIG_FILE: &str = "config.yml";
 
     pub fn default_location() -> PathBuf {
         dirs_next::data_local_dir().unwrap().join("datum_agent")
@@ -41,8 +41,7 @@ impl Repo {
         if !config_file_path.exists() {
             warn!("secret key does not exist. creating new key");
             let cfg = Config::default();
-            let cfg_str = toml::to_string_pretty(&cfg)?;
-            tokio::fs::write(config_file_path, cfg_str.as_bytes()).await?;
+            cfg.write(config_file_path).await?;
             return Ok(cfg);
         };
 

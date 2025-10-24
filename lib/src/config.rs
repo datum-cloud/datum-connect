@@ -37,13 +37,13 @@ impl Config {
         let config = tokio::fs::read_to_string(path)
             .await
             .context("reading config file")?;
-        let config = toml::from_str(&config).context("paring config file")?;
+        let config = serde_yml::from_str(&config).context("paring config file")?;
         Ok(config)
     }
 
-    pub async fn write(self, path: PathBuf) -> Result<Self> {
-        fs::write(path, toml::to_string_pretty(&self)?)?;
-
-        Ok(self)
+    pub async fn write(&self, path: PathBuf) -> Result<()> {
+        let data = serde_yml::to_string(self)?;
+        fs::write(path, data)?;
+        Ok(())
     }
 }
