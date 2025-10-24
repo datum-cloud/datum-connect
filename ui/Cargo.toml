@@ -1,0 +1,35 @@
+[package]
+name = "datum_proxy"
+version = "0.1.0"
+authors = ["b5 <sparkle_pony_2000@qri.io>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { version = "0.6.0", features = ["router"] }
+
+anyhow.workspace = true
+snafu.workspace = true
+hex.workspace = true
+iroh.workspace = true
+iroh-base.workspace = true
+lib.workspace = true
+quinn.workspace = true
+rand.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+data-encoding.workspace = true
+n0-snafu.workspace = true
+uuid.workspace = true
+
+[features]
+default = ["desktop"]
+# The feature that are only required for the web = ["dioxus/web"] build target should be optional and only enabled in the web = ["dioxus/web"] feature
+web = ["dioxus/web"]
+# The feature that are only required for the desktop = ["dioxus/desktop"] build target should be optional and only enabled in the desktop = ["dioxus/desktop"] feature
+desktop = ["dioxus/desktop"]
+# The feature that are only required for the mobile = ["dioxus/mobile"] build target should be optional and only enabled in the mobile = ["dioxus/mobile"] feature
+mobile = ["dioxus/mobile"]

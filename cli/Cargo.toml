@@ -1,0 +1,11 @@
+[package]
+name = "datum-proxy-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+lib.workspace = true
+tokio.workspace = true
+
+clap = { version = "4.5.50", features = ["derive"] }
