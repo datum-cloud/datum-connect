@@ -39,7 +39,7 @@ pub fn EditProxy(id: String) -> Element {
         proxy.info.label = (!label.is_empty()).then(|| label.clone());
         state.node().listen.set_proxy(proxy).await?;
         let nav = use_navigator();
-        nav.push(Route::TempProxies {});
+        nav.push(Route::ProxiesList {});
         n0_error::Ok(())
     });
 
@@ -62,7 +62,7 @@ pub fn EditProxy(id: String) -> Element {
                     button {
                         class: "w-10 h-10 rounded-xl border border-[#dfe3ea] bg-white flex items-center justify-center text-slate-600 hover:text-slate-800 hover:bg-gray-50 shadow-sm cursor-pointer",
                         onclick: move |_| {
-                            let _ = nav.push(Route::TempProxies {  });
+                            let _ = nav.push(Route::ProxiesList {  });
                         },
                         "←"
                     }
@@ -147,7 +147,7 @@ pub fn EditProxy(id: String) -> Element {
                         Button {
                             kind: ButtonKind::Secondary,
                             onclick: move |_| {
-                                let _ = nav.push(Route::TempProxies {  });
+                                let _ = nav.push(Route::ProxiesList {  });
                             },
                             text: "Cancel"
                         }

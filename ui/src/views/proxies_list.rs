@@ -5,7 +5,7 @@ use lib::ProxyState;
 use crate::{state::AppState, Route};
 
 #[component]
-pub fn TempProxies() -> Element {
+pub fn ProxiesList() -> Element {
     let mut proxies = use_signal(Vec::<ProxyState>::new);
 
     use_future(move || async move {
@@ -27,6 +27,7 @@ pub fn TempProxies() -> Element {
     // Dioxus will drop that scope and cancel the task before it runs.
     let mut on_delete = use_action(move |proxy: ProxyState| async move {
         let state = consume_context::<AppState>();
+        debug!("on delete called: {}", proxy.id());
         state
             .listen_node()
             .remove_proxy(proxy.id())
@@ -53,9 +54,9 @@ pub fn TempProxies() -> Element {
     } else {
         rsx! {
             div { class: "space-y-5",
-                for (idx, proxy) in proxies().into_iter().enumerate() {
+                for proxy in proxies().into_iter() {
                     // println!("PROXY {proxy:?}");
-                    TunnelCard { proxy, show_wave: idx == 0, on_delete: on_delete_handler }
+                    TunnelCard { key: "{proxy.id()}", proxy, on_delete: on_delete_handler }
                 }
             }
         }
@@ -69,7 +70,7 @@ pub fn TempProxies() -> Element {
 }
 
 #[component]
-fn TunnelCard(proxy: ProxyState, show_wave: bool, on_delete: EventHandler<ProxyState>) -> Element {
+fn TunnelCard(proxy: ProxyState, on_delete: EventHandler<ProxyState>) -> Element {
     let mut proxy_signal = use_signal(move || proxy);
 
     let mut menu_open = use_signal(|| false);

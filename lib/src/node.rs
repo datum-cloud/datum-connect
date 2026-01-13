@@ -140,10 +140,12 @@ impl ListenNode {
     }
 
     pub async fn remove_proxy(&self, resource_id: &str) -> Result<Option<ProxyState>> {
+        debug!(%resource_id, "removing proxy {resource_id}");
         let res = self
             .state
             .update(&self.repo, move |state| state.remove_proxy(resource_id))
             .await;
+        debug!(%resource_id, "removed {res:?}");
         if let Err(err) = self
             .n0des
             .unpublish_ticket::<AdvertismentTicket>(resource_id.to_string())

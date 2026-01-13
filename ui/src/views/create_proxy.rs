@@ -28,7 +28,7 @@ pub fn CreateProxy() -> Element {
             .await
             .context("Failed to save proxy")?;
         let nav = use_navigator();
-        nav.push(Route::TempProxies {});
+        nav.push(Route::ProxiesList {});
         n0_error::Ok(())
     });
 
@@ -39,7 +39,7 @@ pub fn CreateProxy() -> Element {
                 button {
                     class: "w-10 h-10 rounded-xl border border-[#dfe3ea] bg-white flex items-center justify-center text-slate-600 hover:text-slate-800 hover:bg-gray-50 shadow-sm cursor-pointer",
                     onclick: move |_| {
-                        nav.push(Route::TempProxies {  });
+                        nav.push(Route::ProxiesList {  });
                     },
                     "←"
                 }
@@ -96,7 +96,7 @@ pub fn CreateProxy() -> Element {
                         Button {
                             kind: ButtonKind::Secondary,
                             onclick: move |_| {
-                                let _ = nav.push(Route::TempProxies {  });
+                                let _ = nav.push(Route::ProxiesList {  });
                             },
                             text: "Cancel"
                         }
