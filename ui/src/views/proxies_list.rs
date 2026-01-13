@@ -95,7 +95,7 @@ fn TunnelCard(proxy: ProxyState, show_wave: bool, on_delete: EventHandler<ProxyS
     rsx! {
         div {
             // darker shadow + hover lift
-            class: "bg-white rounded-xl border border-[#e3e7ee] shadow-[0_10px_28px_rgba(17,24,39,0.10)] hover:shadow-[0_14px_34px_rgba(17,24,39,0.14)] transition-shadow overflow-hidden cursor-pointer",
+            class: "bg-white rounded-xl border border-[#e3e7ee] shadow-[0_10px_28px_rgba(17,24,39,0.10)] hover:shadow-[0_14px_34px_rgba(17,24,39,0.14)] transition-shadow cursor-pointer",
             onclick: move |_| {
                 let id = proxy_signal().id().to_string();
                 // Clicking the card opens details (unless the kebab menu is open)
@@ -104,10 +104,10 @@ fn TunnelCard(proxy: ProxyState, show_wave: bool, on_delete: EventHandler<ProxyS
                 }
                 nav.push(Route::EditProxy { id });
             },
-            div { class: "p-6",
+            div { class: "",
                 // header row: title + toggle
-                div { class: "flex items-start justify-between gap-6",
-                    h2 { class: "text-xl font-semibold tracking-tight text-slate-900", {proxy.info.label()} }
+                div { class: "p-4 flex items-start justify-between",
+                    h2 { class: "text-md font-semibold tracking-tight text-slate-900", {proxy.info.label()} }
                     Toggle {
                         enabled,
                         on_toggle: move |next| toggle_action.call(next)
@@ -115,21 +115,21 @@ fn TunnelCard(proxy: ProxyState, show_wave: bool, on_delete: EventHandler<ProxyS
                 }
 
                 // divider under the header (Figma-style)
-                div { class: "mt-5 border-t border-[#eceee9]" }
+                div { class: "border-t border-[#eceee9]" }
 
                 // body: rows + kebab aligned to the right like Figma
-                div { class: "mt-5 flex items-start justify-between gap-6",
+                div { class: "p-4 flex items-start justify-between",
                     div { class: "space-y-4",
                         div { class: "flex items-center gap-5",
-                            GlobeIcon {}
+                            GlobeIcon { class: "w-[20] h-[20]" }
                             span { class: "text-base font-medium text-slate-800", {proxy.info.domain()} }
                         }
                         div { class: "flex items-center gap-5",
-                            ArrowIcon {}
+                            ArrowIcon { class: "w-[20] h-[20] "}
                             span { class: "text-base text-slate-700", {proxy.info.local_url()} }
                         }
                         div { class: "flex items-center gap-5",
-                            PlugIcon {}
+                            PlugIcon { class: "w-[20] h-[20] "}
                             span { class: "text-base text-slate-700", {proxy.info.datum_url()} }
                         }
                     }
@@ -215,20 +215,29 @@ fn Toggle(enabled: bool, on_toggle: EventHandler<bool>) -> Element {
     };
     rsx! {
         button {
-            class: "relative inline-flex h-7 w-12 items-center rounded-full transition-colors {bg} shadow-sm",
+            class: "relative inline-flex h-6 w-12 items-center rounded-full transition-colors {bg} shadow-sm",
             onclick: move |evt| {
                 evt.stop_propagation();
                 on_toggle.call(!enabled)
             },
-            span { class: "inline-block h-6 w-6 transform rounded-full bg-white transition-transform {knob} shadow-sm" }
+            span { class: "inline-block h-5 w-6 transform rounded-full bg-white transition-transform {knob} shadow-sm" }
         }
     }
 }
 
 #[component]
-fn GlobeIcon() -> Element {
+fn IconSvg(#[props(default)] class: String, children: Element) -> Element {
     rsx! {
-        svg { width: "24", height: "24", view_box: "0 0 24 24", fill: "none", class: "text-[#9c8a87]",
+        svg {  width: "24", height: "24", view_box: "0 0 24 24", fill: "none", class: "text-[#bf9595] {class}",
+            {children}
+        }
+    }
+}
+
+#[component]
+fn GlobeIcon(#[props(default)] class: String) -> Element {
+    rsx! {
+        IconSvg { class,
             path { d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", stroke: "currentColor", stroke_width: "1.6" }
             path { d: "M3 12h18", stroke: "currentColor", stroke_width: "1.6", stroke_linecap: "round" }
             path { d: "M12 3c2.5 2.8 3.9 5.9 3.9 9S14.5 18.2 12 21c-2.5-2.8-3.9-5.9-3.9-9S9.5 5.8 12 3Z", stroke: "currentColor", stroke_width: "1.6" }
@@ -237,18 +246,18 @@ fn GlobeIcon() -> Element {
 }
 
 #[component]
-fn ArrowIcon() -> Element {
+fn ArrowIcon(#[props(default)] class: String) -> Element {
     rsx! {
-        svg { width: "24", height: "24", view_box: "0 0 24 24", fill: "none", class: "text-[#9c8a87]",
+        IconSvg { class,
             path { d: "M5 5v14h14", stroke: "currentColor", stroke_width: "1.8", stroke_linecap: "round", stroke_linejoin: "round" }
         }
     }
 }
 
 #[component]
-fn PlugIcon() -> Element {
+fn PlugIcon(#[props(default)] class: String) -> Element {
     rsx! {
-        svg { width: "24", height: "24", view_box: "0 0 24 24", fill: "none", class: "text-[#9c8a87]",
+        IconSvg { class,
             path { d: "M9 3v6M15 3v6", stroke: "currentColor", stroke_width: "1.6", stroke_linecap: "round" }
             path { d: "M7 9h10v3a5 5 0 0 1-5 5h0a5 5 0 0 1-5-5V9Z", stroke: "currentColor", stroke_width: "1.6", stroke_linejoin: "round" }
             path { d: "M12 17v4", stroke: "currentColor", stroke_width: "1.6", stroke_linecap: "round" }
@@ -261,7 +270,7 @@ fn WaveFooter() -> Element {
     rsx! {
         // light wave similar to the Figma footer hint
         svg {
-            width: "100%", height: "86", view_box: "0 0 800 120", fill: "none",
+            width: "100%", height: "50", view_box: "0 0 800 120", fill: "none",
             preserve_aspect_ratio: "none",
             path {
                 d: "M0 80 C 120 30, 220 120, 340 70 C 460 20, 560 120, 680 70 C 740 45, 780 55, 800 60 L 800 120 L 0 120 Z",
