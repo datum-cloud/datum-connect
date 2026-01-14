@@ -44,22 +44,24 @@ jobs:
       - name: Install Dioxus CLI
         run: cargo binstall dioxus-cli --locked
 
-      - name: Change workdir
-        run: cd ui
-
       - name: Bundle (macOS)
         if: runner.os == 'macOS'
+        working-directory: ./ui
         run: dx bundle --desktop --release --package-types dmg
 
       - name: Bundle (Linux)
         if: runner.os == 'Linux'
+        working-directory: ./ui
         # TODO: stripping fails currently, it seems to be a known issues
         # See https://github.com/DioxusLabs/dioxus/issues/3426
         # and https://github.com/linuxdeploy/linuxdeploy/issues/272
         # For now we set NO_STRIP, which makes the bundles *huge*...
-        run: NO_STRIP=true dx bundle --desktop --release --package-types appimage
+        env:
+          NO_STRIP: true
+        run: dx bundle --desktop --release --package-types appimage
 
       - name: Bundle (Windows)
+        working-directory: ./ui
         if: runner.os == 'Windows'
         run: dx bundle --desktop --release --package-types nsis
 
@@ -67,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: DatumConnect-${{ runner.os }}
-          path: dist/**
+          path: ui/dist/**
 
   release:
     needs: [bundle]
