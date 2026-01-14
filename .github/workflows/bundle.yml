@@ -42,7 +42,7 @@ jobs:
             libxdo-dev
 
       - name: Install Dioxus CLI
-        run: cargo binstall dioxus-cli --locked
+        run: cargo binstall dioxus-cli --locked --force
 
       - name: Bundle (macOS)
         if: runner.os == 'macOS'
