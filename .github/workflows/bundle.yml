@@ -16,6 +16,9 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
 
+    env:
+      BUILD_N0DES_API_SECRET: ${{ secrets.N0DES_API_SECRET }}
+
     steps:
       - uses: actions/checkout@v4
 
