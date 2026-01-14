@@ -37,7 +37,7 @@ jobs:
             libxdo-dev
 
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --locked
+        run: cargo binstall dioxus-cli --locked
 
       - name: Change workdir
         run: cd ui
