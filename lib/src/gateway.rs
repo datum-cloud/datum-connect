@@ -85,16 +85,25 @@ impl WriteErrorResponse for ErrorResponseWriter {
     ) -> io::Result<()> {
         let title = format!("{} {}", res.status.as_u16(), res.reason());
         let body = match res.status {
-            StatusCode::NOT_FOUND => {
-                "The requested proxy was not found. Please check the domain and try again."
+            StatusCode::BAD_REQUEST => {
+                "The request could not be understood by the gateway. Please try again."
             }
-            StatusCode::GATEWAY_TIMEOUT => "The requested proxy is unavailable.",
-            StatusCode::BAD_GATEWAY => "The requested proxy is malfunctioning.",
+            StatusCode::UNAUTHORIZED => {
+                "You are not logged in or your session has expired. Please sign in and try again."
+            }
+            StatusCode::FORBIDDEN => "Access to this resource is not allowed through the gateway.",
+            StatusCode::NOT_FOUND => "The requested page could not be found through the gateway.",
             StatusCode::INTERNAL_SERVER_ERROR => {
-                "The gateway is experiencing problems. Please try again later."
+                "The gateway encountered an internal error. Please try again later."
             }
-            StatusCode::BAD_REQUEST => "You performed an invalid request.",
-            _ => "The service experienced an error",
+            StatusCode::BAD_GATEWAY => {
+                "The gateway could not get a valid response from the upstream service."
+            }
+            StatusCode::SERVICE_UNAVAILABLE => {
+                "The service is temporarily unavailable. Please try again shortly."
+            }
+            StatusCode::GATEWAY_TIMEOUT => "The upstream service took too long to respond.",
+            _ => "The service experienced an unexpected error.",
         };
         let html = GatewayErrorTemplate {
             body: &body,
