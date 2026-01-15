@@ -1,11 +1,13 @@
 use iroh::protocol::Router;
 use iroh::{Endpoint, EndpointId, SecretKey};
+use iroh_proxy_utils::downstream::{DownstreamProxy, EndpointAuthority, ProxyOpts};
+use iroh_proxy_utils::upstream::{AuthError, AuthHandler, UpstreamProxy};
 use n0_error::{Result, StackResultExt, StdResultExt};
 use n0_future::task::AbortOnDropHandle;
 use n0_future::{IterExt, StreamExt};
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::vec;
 use tokio::net::TcpListener;
@@ -13,15 +15,15 @@ use tokio::sync::broadcast;
 use tokio::sync::futures::Notified;
 use tokio::task::JoinHandle;
 use tracing::{Instrument, debug, error, error_span, info, warn};
+use ttl_cache::TtlCache;
 
-use iroh_proxy_utils::{
-    ALPN as IROH_HTTP_CONNECT_ALPN, AuthError, AuthHandler, Authority, HttpRequest, RequestKind,
-    TunnelClientPool, TunnelListener,
-};
+use iroh_proxy_utils::{ALPN as IROH_HTTP_CONNECT_ALPN, HttpProxyRequest, HttpProxyRequestKind};
 
 use crate::state::AdvertismentTicket;
 use crate::{Advertisment, ProxyState, StateWrapper, TcpProxyData};
 use crate::{Repo, config::Config};
+
+const TICKET_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -63,10 +65,10 @@ impl ListenNode {
 
         let state = repo.load_state().await?;
 
-        let tunnel_listener = TunnelListener::new(state.clone())?;
+        let upstream_proxy = UpstreamProxy::new(state.clone())?;
 
         let router = Router::builder(endpoint)
-            .accept(IROH_HTTP_CONNECT_ALPN, tunnel_listener)
+            .accept(IROH_HTTP_CONNECT_ALPN, upstream_proxy)
             .spawn();
 
         let (metrics_tx, _) = broadcast::channel(1);
@@ -196,36 +198,65 @@ impl StateWrapper {
 }
 
 impl AuthHandler for StateWrapper {
-    fn authorize<'a>(
+    async fn authorize<'a>(
         &'a self,
         _remote_id: EndpointId,
-        req: &'a HttpRequest,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), AuthError>> + Send + 'a>> {
-        Box::pin(async move {
-            let authority = match &req.kind {
-                RequestKind::Connect { authority } => authority,
-                RequestKind::Http {
-                    authority_from_path,
-                    ..
-                } => authority_from_path
-                    .as_ref()
-                    .ok_or_else(|| AuthError::BadRequest)?,
-            };
-
-            if self.tcp_proxy_exists(&authority.host, authority.port) {
-                Ok(())
-            } else {
-                Err(AuthError::Forbidden)
+        req: &'a HttpProxyRequest,
+    ) -> Result<(), AuthError> {
+        match &req.kind {
+            HttpProxyRequestKind::Tunnel { target } => {
+                if self.tcp_proxy_exists(&target.host, target.port) {
+                    Ok(())
+                } else {
+                    Err(AuthError::Forbidden)
+                }
             }
-        })
+            HttpProxyRequestKind::Absolute { .. } => Err(AuthError::Forbidden),
+        }
+    }
+}
+
+#[derive(derive_more::Debug, Clone)]
+pub struct TicketClient {
+    n0des: Arc<iroh_n0des::Client>,
+    #[debug(skip)]
+    cache: Arc<Mutex<TtlCache<String, AdvertismentTicket>>>,
+}
+
+impl TicketClient {
+    pub(crate) fn new(n0des: Arc<iroh_n0des::Client>) -> Self {
+        Self {
+            n0des,
+            cache: Arc::new(Mutex::new(TtlCache::new(1024))),
+        }
+    }
+
+    pub async fn get(&self, codename: &str) -> Result<AdvertismentTicket> {
+        if let Some(ticket) = self.cache.lock().expect("poisoned").get(codename) {
+            Ok(ticket.clone())
+        } else {
+            let ticket = self
+                .n0des
+                .fetch_ticket::<AdvertismentTicket>(codename.to_string())
+                .await
+                .std_context("fetching n0des ticket")?
+                .map(|ticket| ticket.ticket)
+                .context("ticket not found")?;
+            self.cache.lock().expect("poisoned").insert(
+                codename.to_string(),
+                ticket.clone(),
+                TICKET_TTL,
+            );
+            Ok(ticket)
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ConnectNode {
     pub(crate) endpoint: Endpoint,
-    pub(crate) n0des: Arc<iroh_n0des::Client>,
-    pub(crate) pool: TunnelClientPool,
+    pub(crate) proxy: DownstreamProxy,
+    pub tickets: TicketClient,
 }
 
 impl ConnectNode {
@@ -234,23 +265,13 @@ impl ConnectNode {
         let secret_key = repo.connect_key().await?;
         let endpoint = build_endpoint(secret_key, &config, vec![]).await?;
         let n0des = build_n0des_client(&endpoint).await?;
-        let pool = TunnelClientPool::new(endpoint.clone(), Default::default());
+        let tickets = TicketClient::new(n0des);
+        let pool = DownstreamProxy::new(endpoint.clone(), Default::default());
         Ok(Self {
             endpoint,
-            n0des,
-            pool,
+            tickets,
+            proxy: pool,
         })
-    }
-
-    pub async fn fetch_ticket(&self, codename: &str) -> Result<AdvertismentTicket> {
-        let ticket = self
-            .n0des
-            .fetch_ticket::<AdvertismentTicket>(codename.to_string())
-            .await
-            .std_context("fetching n0des ticket")?
-            .map(|ticket| ticket.ticket)
-            .context("ticket not found")?;
-        Ok(ticket)
     }
 
     pub fn endpoint_id(&self) -> EndpointId {
@@ -262,7 +283,7 @@ impl ConnectNode {
         codename: &str,
         bind_addr: SocketAddr,
     ) -> Result<OutboundProxyHandle> {
-        let ticket = self.fetch_ticket(codename).await?;
+        let ticket = self.tickets.get(codename).await?;
         self.connect_and_bind_local(ticket.endpoint, ticket.service(), bind_addr)
             .await
     }
@@ -275,11 +296,14 @@ impl ConnectNode {
     ) -> Result<OutboundProxyHandle> {
         let local_socket = TcpListener::bind(bind_addr).await?;
         let bound_addr = local_socket.local_addr()?;
-        let pool = self.pool.clone();
-        let authority: Authority = advertisment.clone().into();
+
+        let upstream = EndpointAuthority::new(remote_id, advertisment.clone().into());
+        let opts = ProxyOpts::reverse_only(upstream);
+
+        let proxy = self.proxy.clone();
         let task = tokio::spawn(async move {
             info!("bound local socket on {bound_addr}");
-            if let Err(err) = pool.forward_from_local_listener(remote_id, authority, local_socket).await {
+            if let Err(err) = proxy.forward_tcp_listener(local_socket, opts).await {
                 warn!("Forwarding local socket failed: {err:#}");
             }
         }.instrument(error_span!("forward-tcp", remote_id=%remote_id.fmt_short(), authority=%advertisment.address())));
