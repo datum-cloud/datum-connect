@@ -233,8 +233,10 @@ impl TicketClient {
 
     pub async fn get(&self, codename: &str) -> Result<AdvertismentTicket> {
         if let Some(ticket) = self.cache.lock().expect("poisoned").get(codename) {
+            debug!(%codename, "ticket is cached");
             Ok(ticket.clone())
         } else {
+            debug!(%codename, "fetch ticket from n0des");
             let ticket = self
                 .n0des
                 .fetch_ticket::<AdvertismentTicket>(codename.to_string())

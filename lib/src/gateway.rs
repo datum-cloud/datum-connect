@@ -43,12 +43,12 @@ impl ExtractEndpointAuthority for Resolver {
         let host = host.to_str().map_err(|_| ExtractError::BadRequest)?;
         let codename = extract_subdomain(host).ok_or(ExtractError::NotFound)?;
 
-        debug!(%codename, "extracted codename, fetching ticket...");
+        debug!(%codename, "extracted codename, resolving ticket...");
         let ticket = self.tickets.get(codename).await.map_err(|err| {
             debug!(%codename, "failed to fetch ticket: {err:#}");
             ExtractError::NotFound
         })?;
-        debug!(?ticket, "fetched ticket");
+        debug!(?ticket, "resolved ticket");
         Ok(EndpointAuthority {
             endpoint_id: ticket.endpoint,
             authority: ticket.data.data.into(),
