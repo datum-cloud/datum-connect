@@ -1,4 +1,4 @@
-name: bundle
+name: CI
 
 on:
   push:
