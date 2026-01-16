@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::futures::Notified;
 use tokio::task::JoinHandle;
-use tracing::{Instrument, debug, error, error_span, info, warn};
+use tracing::{Instrument, debug, error, error_span, info, instrument, warn};
 
 use iroh_proxy_utils::{
     ALPN as IROH_HTTP_CONNECT_ALPN, AuthError, AuthHandler, Authority, HttpRequest, RequestKind,
@@ -56,6 +56,7 @@ pub struct ListenNode {
 }
 
 impl ListenNode {
+    #[instrument("listen-node", skip_all)]
     pub async fn new(repo: Repo) -> Result<Self> {
         let config = repo.config().await?;
         let secret_key = repo.listen_key().await?;
@@ -74,25 +75,28 @@ impl ListenNode {
         let (metrics_tx, _) = broadcast::channel(1);
 
         let metrics_update_interval = Duration::from_millis(100);
-        let metrics_task = tokio::spawn({
-            let endpoint = router.endpoint().clone();
-            let metrics_tx = metrics_tx.clone();
-            async move {
-                loop {
-                    let metrics = endpoint.metrics();
-                    let recv_total = metrics.magicsock.recv_data_ipv4.get()
-                        + metrics.magicsock.recv_data_ipv6.get()
-                        + metrics.magicsock.recv_data_relay.get();
-                    let send_total = metrics.magicsock.send_data.get();
-                    let update = MetricsUpdate {
-                        send: send_total,
-                        recv: recv_total,
-                    };
-                    metrics_tx.send(update).ok();
-                    n0_future::time::sleep(metrics_update_interval).await;
+        let metrics_task = tokio::spawn(
+            {
+                let endpoint = router.endpoint().clone();
+                let metrics_tx = metrics_tx.clone();
+                async move {
+                    loop {
+                        let metrics = endpoint.metrics();
+                        let recv_total = metrics.magicsock.recv_data_ipv4.get()
+                            + metrics.magicsock.recv_data_ipv6.get()
+                            + metrics.magicsock.recv_data_relay.get();
+                        let send_total = metrics.magicsock.send_data.get();
+                        let update = MetricsUpdate {
+                            send: send_total,
+                            recv: recv_total,
+                        };
+                        metrics_tx.send(update).ok();
+                        n0_future::time::sleep(metrics_update_interval).await;
+                    }
                 }
             }
-        });
+            .instrument(error_span!("metrics")),
+        );
 
         let this = Self {
             n0des,
@@ -231,6 +235,7 @@ pub struct ConnectNode {
 }
 
 impl ConnectNode {
+    #[instrument("connect-node", skip_all)]
     pub async fn new(repo: Repo) -> Result<Self> {
         let config = repo.config().await?;
         let secret_key = repo.connect_key().await?;
@@ -334,6 +339,7 @@ async fn build_endpoint(
         builder = builder.bind_addr_v6(addr);
     }
     let endpoint = builder.bind().await?;
+    info!(id = %endpoint.id(), "iroh endpoint bound");
     Ok(endpoint)
 }
 
