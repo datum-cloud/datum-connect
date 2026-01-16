@@ -3,7 +3,6 @@ name: bundle
 on:
   push:
     branches: [main]
-  # TODO: Remove before merge
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -78,8 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # TODO: activate this before merge
-    # if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Set Version Info and Paths
         id: set_paths
