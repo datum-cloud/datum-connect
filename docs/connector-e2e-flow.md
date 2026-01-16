@@ -14,6 +14,7 @@ responsible for each action and what data is exchanged.
 ## Flow
 ### 1) Device starts and registers a Connector
 **Responsible:** Device Agent
+
 **Data:**
 - iroh NodeID (public key)
 - home relay URL
@@ -26,6 +27,7 @@ responsible for each action and what data is exchanged.
 
 ### 2) Control plane publishes discovery records
 **Responsible:** Control Plane Controller
+
 **Data:**
 - `Connector.status.connectionDetails`
 
@@ -35,6 +37,7 @@ responsible for each action and what data is exchanged.
 
 ### 3) Device advertises tunnels
 **Responsible:** Device Agent
+
 **Data:**
 - `ConnectorAdvertisement` `spec.layer4` services (host + port)
 
@@ -43,6 +46,7 @@ responsible for each action and what data is exchanged.
 
 ### 4) Device creates HTTPProxy
 **Responsible:** Device Agent (on behalf of the user)
+
 **Data:**
 - public hostname(s)
 - backend endpoint URL (host + port)
@@ -53,6 +57,7 @@ responsible for each action and what data is exchanged.
 
 ### 5) NSO programs Envoy
 **Responsible:** NSO
+
 **Data:**
 - `HTTPProxy` backend + connector reference
 - `ConnectorAdvertisement` for validation
@@ -69,6 +74,7 @@ responsible for each action and what data is exchanged.
 
 ### 6) Envoy handles inbound requests
 **Responsible:** Envoy + iroh sidecar
+
 **Actions:**
 - Envoy routes traffic to sidecar (single listener).
 - Sidecar reads metadata, dials by NodeID using discovery, and forwards traffic.
