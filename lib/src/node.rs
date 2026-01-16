@@ -1,10 +1,12 @@
 use iroh::protocol::Router;
 use iroh::{Endpoint, EndpointId, SecretKey};
+use iroh_n0des::ApiSecret;
 use n0_error::{Result, StackResultExt, StdResultExt};
 use n0_future::task::AbortOnDropHandle;
 use n0_future::{IterExt, StreamExt};
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
@@ -336,17 +338,22 @@ async fn build_endpoint(
 }
 
 async fn build_n0des_client(endpoint: &Endpoint) -> Result<Arc<iroh_n0des::Client>> {
-    let secret = match std::env::var("N0DES_API_SECRET") {
-        Ok(secret) => secret,
+    let api_secret_str = match std::env::var("N0DES_API_SECRET") {
+        Ok(s) => s,
         Err(_) => match option_env!("BUILD_N0DES_API_SECRET") {
-            None => n0_error::bail_any!("N0DES_API_SECRET is not set"),
-            Some(val) => val.to_string(),
+            None => n0_error::bail_any!("Missing env varable N0DES_API_SECRET"),
+            Some(s) => s.to_string(),
         },
     };
+    let api_secret = ApiSecret::from_str(&api_secret_str)
+        .context("Failed to parse n0des API secret from env variable N0DES_API_SECRET")?;
+    let remote_id = api_secret.remote.id;
+    debug!(remote=%remote_id.fmt_short(), "connecting to n0des endpoint");
     let client = iroh_n0des::Client::builder(endpoint)
-        .api_secret_from_str(&secret)?
+        .api_secret(api_secret)?
         .build()
         .await
-        .std_context("Failed to start n0des client")?;
+        .std_context("Failed to connect to n0des endpoint")?;
+    info!(remote=%remote_id.fmt_short(), "connected to n0des endpoint");
     Ok(Arc::new(client))
 }

@@ -117,12 +117,14 @@ async fn main() -> n0_error::Result<()> {
                 info: advertisment,
             };
 
+            println!("Adding {proxy:?})");
             let state = repo.load_state().await?;
             state
                 .update(&repo, |state| {
                     state.set_proxy(proxy);
                 })
                 .await?;
+            println!("OK.");
         }
         Commands::Serve => {
             let node = ListenNode::new(repo).await?;
