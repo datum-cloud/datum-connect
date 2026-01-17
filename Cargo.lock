@@ -4217,7 +4217,7 @@ dependencies = [
 [[package]]
 name = "iroh-proxy-utils"
 version = "0.1.0"
-source = "git+https://github.com/n0-computer/iroh-proxy-utils?branch=refactor%2Fproxy-structure#a02c05a4c88397d515d4a6098928e460e1b750b4"
+source = "git+https://github.com/n0-computer/iroh-proxy-utils?branch=refactor%2Fproxy-structure#41fca651a92bed019173e3cf71dfdd50831df70b"
 dependencies = [
  "bytes",
  "derive_more 2.1.1",

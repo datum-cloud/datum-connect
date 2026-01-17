@@ -1,12 +1,14 @@
 use iroh::protocol::Router;
 use iroh::{Endpoint, EndpointId, SecretKey};
+use iroh_n0des::ApiSecret;
 use iroh_proxy_utils::downstream::{DownstreamProxy, EndpointAuthority, ProxyOpts};
 use iroh_proxy_utils::upstream::{AuthError, AuthHandler, UpstreamProxy};
-use n0_error::{Result, StackResultExt, StdResultExt};
+use n0_error::{AnyError, Result, StackResultExt, StdResultExt, stack_error};
 use n0_future::task::AbortOnDropHandle;
 use n0_future::{IterExt, StreamExt};
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::vec;
@@ -14,7 +16,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::futures::Notified;
 use tokio::task::JoinHandle;
-use tracing::{Instrument, debug, error, error_span, info, warn};
+use tracing::{Instrument, debug, error, error_span, info, instrument, warn};
 use ttl_cache::TtlCache;
 
 use iroh_proxy_utils::{ALPN as IROH_HTTP_CONNECT_ALPN, HttpProxyRequest, HttpProxyRequestKind};
@@ -56,6 +58,7 @@ pub struct ListenNode {
 }
 
 impl ListenNode {
+    #[instrument("listen-node", skip_all)]
     pub async fn new(repo: Repo) -> Result<Self> {
         let config = repo.config().await?;
         let secret_key = repo.listen_key().await?;
@@ -74,25 +77,28 @@ impl ListenNode {
         let (metrics_tx, _) = broadcast::channel(1);
 
         let metrics_update_interval = Duration::from_millis(100);
-        let metrics_task = tokio::spawn({
-            let endpoint = router.endpoint().clone();
-            let metrics_tx = metrics_tx.clone();
-            async move {
-                loop {
-                    let metrics = endpoint.metrics();
-                    let recv_total = metrics.magicsock.recv_data_ipv4.get()
-                        + metrics.magicsock.recv_data_ipv6.get()
-                        + metrics.magicsock.recv_data_relay.get();
-                    let send_total = metrics.magicsock.send_data.get();
-                    let update = MetricsUpdate {
-                        send: send_total,
-                        recv: recv_total,
-                    };
-                    metrics_tx.send(update).ok();
-                    n0_future::time::sleep(metrics_update_interval).await;
+        let metrics_task = tokio::spawn(
+            {
+                let endpoint = router.endpoint().clone();
+                let metrics_tx = metrics_tx.clone();
+                async move {
+                    loop {
+                        let metrics = endpoint.metrics();
+                        let recv_total = metrics.magicsock.recv_data_ipv4.get()
+                            + metrics.magicsock.recv_data_ipv6.get()
+                            + metrics.magicsock.recv_data_relay.get();
+                        let send_total = metrics.magicsock.send_data.get();
+                        let update = MetricsUpdate {
+                            send: send_total,
+                            recv: recv_total,
+                        };
+                        metrics_tx.send(update).ok();
+                        n0_future::time::sleep(metrics_update_interval).await;
+                    }
                 }
             }
-        });
+            .instrument(error_span!("metrics")),
+        );
 
         let this = Self {
             n0des,
@@ -223,6 +229,12 @@ pub struct TicketClient {
     cache: Arc<Mutex<TtlCache<String, AdvertismentTicket>>>,
 }
 
+#[stack_error(derive)]
+pub enum FetchTicketError {
+    NotFound,
+    FailedToFetch(#[error(source)] AnyError),
+}
+
 impl TicketClient {
     pub(crate) fn new(n0des: Arc<iroh_n0des::Client>) -> Self {
         Self {
@@ -231,7 +243,7 @@ impl TicketClient {
         }
     }
 
-    pub async fn get(&self, codename: &str) -> Result<AdvertismentTicket> {
+    pub async fn get(&self, codename: &str) -> Result<AdvertismentTicket, FetchTicketError> {
         if let Some(ticket) = self.cache.lock().expect("poisoned").get(codename) {
             debug!(%codename, "ticket is cached");
             Ok(ticket.clone())
@@ -241,9 +253,9 @@ impl TicketClient {
                 .n0des
                 .fetch_ticket::<AdvertismentTicket>(codename.to_string())
                 .await
-                .std_context("fetching n0des ticket")?
+                .map_err(|err| FetchTicketError::FailedToFetch(AnyError::from_std(err)))?
                 .map(|ticket| ticket.ticket)
-                .context("ticket not found")?;
+                .ok_or(FetchTicketError::NotFound)?;
             self.cache.lock().expect("poisoned").insert(
                 codename.to_string(),
                 ticket.clone(),
@@ -262,6 +274,7 @@ pub struct ConnectNode {
 }
 
 impl ConnectNode {
+    #[instrument("connect-node", skip_all)]
     pub async fn new(repo: Repo) -> Result<Self> {
         let config = repo.config().await?;
         let secret_key = repo.connect_key().await?;
@@ -358,21 +371,27 @@ async fn build_endpoint(
         builder = builder.bind_addr_v6(addr);
     }
     let endpoint = builder.bind().await?;
+    info!(id = %endpoint.id(), "iroh endpoint bound");
     Ok(endpoint)
 }
 
 async fn build_n0des_client(endpoint: &Endpoint) -> Result<Arc<iroh_n0des::Client>> {
-    let secret = match std::env::var("N0DES_API_SECRET") {
-        Ok(secret) => secret,
+    let api_secret_str = match std::env::var("N0DES_API_SECRET") {
+        Ok(s) => s,
         Err(_) => match option_env!("BUILD_N0DES_API_SECRET") {
-            None => n0_error::bail_any!("N0DES_API_SECRET is not set"),
-            Some(val) => val.to_string(),
+            None => n0_error::bail_any!("Missing env varable N0DES_API_SECRET"),
+            Some(s) => s.to_string(),
         },
     };
+    let api_secret = ApiSecret::from_str(&api_secret_str)
+        .context("Failed to parse n0des API secret from env variable N0DES_API_SECRET")?;
+    let remote_id = api_secret.remote.id;
+    debug!(remote=%remote_id.fmt_short(), "connecting to n0des endpoint");
     let client = iroh_n0des::Client::builder(endpoint)
-        .api_secret_from_str(&secret)?
+        .api_secret(api_secret)?
         .build()
         .await
-        .std_context("Failed to start n0des client")?;
+        .std_context("Failed to connect to n0des endpoint")?;
+    info!(remote=%remote_id.fmt_short(), "connected to n0des endpoint");
     Ok(Arc::new(client))
 }

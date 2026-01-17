@@ -15,7 +15,7 @@ use tokio::{
 };
 use tracing::{debug, info};
 
-use crate::{TicketClient, node::ConnectNode};
+use crate::{FetchTicketError, TicketClient, node::ConnectNode};
 
 pub async fn serve(node: ConnectNode, bind_addr: SocketAddr) -> Result<()> {
     let listener = TcpListener::bind(bind_addr).await?;
@@ -45,8 +45,11 @@ impl ExtractEndpointAuthority for Resolver {
 
         debug!(%codename, "extracted codename, resolving ticket...");
         let ticket = self.tickets.get(codename).await.map_err(|err| {
-            debug!(%codename, "failed to fetch ticket: {err:#}");
-            ExtractError::NotFound
+            debug!(%codename, "failed to resolve ticket: {err:#}");
+            match err {
+                FetchTicketError::NotFound => ExtractError::NotFound,
+                FetchTicketError::FailedToFetch(_) => ExtractError::ServiceUnavailable,
+            }
         })?;
         debug!(?ticket, "resolved ticket");
         Ok(EndpointAuthority {
