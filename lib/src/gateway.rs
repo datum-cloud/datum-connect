@@ -2,10 +2,12 @@ use std::{io, net::SocketAddr};
 
 use askama::Template;
 use hyper::StatusCode;
+use iroh::{Endpoint, SecretKey};
 use iroh_proxy_utils::{
-    HttpRequest, HttpResponse,
+    HttpOriginRequest, HttpResponse,
     downstream::{
-        EndpointAuthority, ExtractEndpointAuthority, ExtractError, ProxyOpts, WriteErrorResponse,
+        DownstreamProxy, EndpointAuthority, ExtractError, HttpProxyOpts, ProxyMode,
+        ReverseProxyResolver, WriteErrorResponse,
     },
 };
 use n0_error::Result;
@@ -15,18 +17,40 @@ use tokio::{
 };
 use tracing::{debug, info};
 
-use crate::{FetchTicketError, TicketClient, node::ConnectNode};
+use crate::{FetchTicketError, TicketClient, build_endpoint, build_n0des_client};
 
-pub async fn serve(node: ConnectNode, bind_addr: SocketAddr) -> Result<()> {
-    let listener = TcpListener::bind(bind_addr).await?;
-    info!(?bind_addr, endpoint_id = %node.endpoint_id().fmt_short(),"TCP proxy gateway started");
+pub async fn bind_and_serve(
+    secret_key: SecretKey,
+    config: crate::config::Config,
+    tcp_bind_addr: SocketAddr,
+) -> Result<()> {
+    let endpoint = build_endpoint(secret_key, &config, vec![]).await?;
+    let n0des = build_n0des_client(&endpoint).await?;
 
-    let extractor = Resolver {
-        tickets: node.tickets,
-    };
-    let opts = ProxyOpts::reverse_only(extractor).with_error_response_writer(ErrorResponseWriter);
+    let tickets = TicketClient::new(n0des);
+    serve(endpoint, tickets, tcp_bind_addr).await
+}
 
-    node.proxy.forward_tcp_listener(listener, opts).await
+pub async fn serve(
+    endpoint: Endpoint,
+    tickets: TicketClient,
+    tcp_bind_addr: SocketAddr,
+) -> Result<()> {
+    let listener = TcpListener::bind(tcp_bind_addr).await?;
+    info!(?tcp_bind_addr, endpoint_id = %endpoint.id().fmt_short(),"TCP proxy gateway started");
+
+    let proxy = DownstreamProxy::new(endpoint, Default::default());
+    let resolver = Resolver { tickets };
+    let opts = HttpProxyOpts::default()
+        // Right now the gatewy functions as a reverse proxy, i.e. incoming requests are regular origin-form HTTP
+        // requests, and we resolve the destination from the host header's subdomain.
+        // Once envoy takes over this part, we will use [`HttpProxyOpts::forward`] instead, i.e. expect CONNECT
+        // requests only.
+        .reverse(resolver)
+        .error_response_writer(ErrorResponseWriter);
+    let mode = ProxyMode::Http(opts);
+
+    proxy.forward_tcp_listener(listener, mode).await
 }
 
 #[derive(Clone)]
@@ -34,10 +58,14 @@ struct Resolver {
     tickets: TicketClient,
 }
 
-impl ExtractEndpointAuthority for Resolver {
-    async fn extract_endpoint_authority<'a>(
+/// When operating in reverse-proxy mode we accept origin-form http requests,
+/// and need to resolve their full destination.
+///
+/// This is the currently-deployed version, which uses the subdomain.
+impl ReverseProxyResolver for Resolver {
+    async fn destination<'a>(
         &'a self,
-        req: &'a HttpRequest,
+        req: &'a HttpOriginRequest,
     ) -> Result<EndpointAuthority, ExtractError> {
         let host = req.headers.get("host").ok_or(ExtractError::BadRequest)?;
         let host = host.to_str().map_err(|_| ExtractError::BadRequest)?;
@@ -58,6 +86,18 @@ impl ExtractEndpointAuthority for Resolver {
         })
     }
 }
+
+// /// When operating in forward-proxy mode, i.e. when accepting CONNECT requests or requests
+// /// with absolute-form targets, we only need to resolve an endpoint id from the request,
+// /// because the upstream authority is already part of the original request.
+// impl ForwardProxyResolver for Resolver {
+//     async fn destination<'a>(
+//         &'a self,
+//         req: &'a HttpProxyRequest,
+//     ) -> Result<EndpointId, ExtractError> {
+//         todo!()
+//     }
+// }
 
 pub(super) fn extract_subdomain(host: &str) -> Option<&str> {
     let host = host

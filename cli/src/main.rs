@@ -170,11 +170,12 @@ async fn main() -> n0_error::Result<()> {
             handle.abort();
         }
         Commands::Gateway(args) => {
-            let bind_addr = (args.bind_addr, args.port).into();
-            let node = ConnectNode::new(repo).await?;
+            let bind_addr: SocketAddr = (args.bind_addr, args.port).into();
+            let secret_key = repo.gateway_key().await?;
+            let config = Default::default();
             println!("serving on port {bind_addr}");
             tokio::select! {
-                res = lib::gateway::serve(node, bind_addr) => res?,
+                res = lib::gateway::bind_and_serve(secret_key, config, bind_addr) => res?,
                 _ = tokio::signal::ctrl_c() => {}
             }
         }

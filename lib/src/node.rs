@@ -1,7 +1,7 @@
 use iroh::protocol::Router;
 use iroh::{Endpoint, EndpointId, SecretKey};
 use iroh_n0des::ApiSecret;
-use iroh_proxy_utils::downstream::{DownstreamProxy, EndpointAuthority, ProxyOpts};
+use iroh_proxy_utils::downstream::{DownstreamProxy, EndpointAuthority, ProxyMode};
 use iroh_proxy_utils::upstream::{AuthError, AuthHandler, UpstreamProxy};
 use n0_error::{AnyError, Result, StackResultExt, StdResultExt, stack_error};
 use n0_future::task::AbortOnDropHandle;
@@ -313,12 +313,12 @@ impl ConnectNode {
         let bound_addr = local_socket.local_addr()?;
 
         let upstream = EndpointAuthority::new(remote_id, advertisment.clone().into());
-        let opts = ProxyOpts::reverse_only(upstream);
+        let mode = ProxyMode::Tcp(upstream);
 
         let proxy = self.proxy.clone();
         let task = tokio::spawn(async move {
             info!("bound local socket on {bound_addr}");
-            if let Err(err) = proxy.forward_tcp_listener(local_socket, opts).await {
+            if let Err(err) = proxy.forward_tcp_listener(local_socket, mode).await {
                 warn!("Forwarding local socket failed: {err:#}");
             }
         }.instrument(error_span!("forward-tcp", remote_id=%remote_id.fmt_short(), authority=%advertisment.address())));
@@ -358,7 +358,7 @@ impl OutboundProxyHandle {
 
 /// Build a new iroh endpoint, applying all relevant details from Configuration
 /// to the base endpoint setup
-async fn build_endpoint(
+pub(crate) async fn build_endpoint(
     secret_key: SecretKey,
     common: &Config,
     alpns: Vec<Vec<u8>>,
@@ -375,7 +375,7 @@ async fn build_endpoint(
     Ok(endpoint)
 }
 
-async fn build_n0des_client(endpoint: &Endpoint) -> Result<Arc<iroh_n0des::Client>> {
+pub(crate) async fn build_n0des_client(endpoint: &Endpoint) -> Result<Arc<iroh_n0des::Client>> {
     let api_secret_str = match std::env::var("N0DES_API_SECRET") {
         Ok(s) => s,
         Err(_) => match option_env!("BUILD_N0DES_API_SECRET") {
