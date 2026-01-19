@@ -24,9 +24,6 @@ impl TestDiscovery {
 #[tokio::test]
 #[traced_test]
 async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
-    // TODO: Would be better to use static discovery but for that we'd need to change the ListenNode constructor.
-
-    // add static discovery to not require being online in CI.
     let discovery = TestDiscovery::default();
 
     let n0des_endpoint = Endpoint::bind().await?;
