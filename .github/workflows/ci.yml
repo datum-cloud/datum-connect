@@ -47,4 +47,6 @@ jobs:
         run: dx check -p datum-connect --locked
 
       - name: Cargo test
+        env:
+          RUST_LOG: warn,lib=trace,iroh_proxy_utils=trace
         run: cargo test --locked --workspace

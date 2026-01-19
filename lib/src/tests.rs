@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use hyper::StatusCode;
 use iroh::Endpoint;
 use n0_error::{Result, StdResultExt};
@@ -44,7 +46,7 @@ async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
 
     let domain = format!("{codename}.localhost");
     let client = reqwest::Client::builder()
-        .resolve_to_addrs(&domain, &[gateway_addr])
+        .resolve_to_addrs(&domain, &[(Ipv4Addr::LOCALHOST, 0).into()])
         .build()
         .unwrap();
     let res = client
@@ -76,7 +78,7 @@ mod origin_server {
     pub async fn spawn(
         label: &'static str,
     ) -> n0_error::Result<(SocketAddr, AbortOnDropHandle<()>)> {
-        let listener = TcpListener::bind("localhost:0").await?;
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
         let tcp_addr = listener.local_addr()?;
         debug!(%label, %tcp_addr, "spawned origin server");
         let task = tokio::spawn(async move { run(listener, label).await });
