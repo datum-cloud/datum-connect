@@ -1,7 +1,7 @@
 use std::net::Ipv4Addr;
 
 use hyper::StatusCode;
-use iroh::Endpoint;
+use iroh::{Endpoint, discovery::static_provider::StaticProvider};
 use n0_error::{Result, StdResultExt};
 use n0_future::task::AbortOnDropHandle;
 use n0_tracing_test::traced_test;
@@ -11,12 +11,27 @@ use crate::{
     Advertisment, ListenNode, ProxyState, Repo, TcpProxyData, build_n0des_client, gateway,
 };
 
+#[derive(Default)]
+struct TestDiscovery(StaticProvider);
+
+impl TestDiscovery {
+    fn add(&self, endpoint: &Endpoint) {
+        endpoint.discovery().add(self.0.clone());
+        self.0.add_endpoint_info(endpoint.addr());
+    }
+}
+
 #[tokio::test]
 #[traced_test]
 async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
     // TODO: Would be better to use static discovery but for that we'd need to change the ListenNode constructor.
 
-    let (api_secret, _n0des_router) = n0des_local::start(Endpoint::bind().await?)?;
+    // add static discovery to not require being online in CI.
+    let discovery = TestDiscovery::default();
+
+    let n0des_endpoint = Endpoint::bind().await?;
+    discovery.add(&n0des_endpoint);
+    let (api_secret, _n0des_router) = n0des_local::start(n0des_endpoint)?;
 
     let temp_dir = tempfile::tempdir()?;
     let repo = Repo::open_or_create(temp_dir.path()).await?;
@@ -31,14 +46,15 @@ async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
 
     let codename = proxy_state.info.codename();
 
-    let listen = ListenNode::with_n0des_api_secret(repo, api_secret.clone()).await?;
-    listen.endpoint().online().await;
-    listen.set_proxy(proxy_state).await?;
+    let upstream = ListenNode::with_n0des_api_secret(repo, api_secret.clone()).await?;
+    discovery.add(&upstream.endpoint());
+    upstream.set_proxy(proxy_state).await?;
 
     let (gateway_addr, _gateway_task) = {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
         let endpoint = Endpoint::bind().await?;
+        discovery.add(&endpoint);
         let n0des = build_n0des_client(&endpoint, api_secret).await?;
         let task = tokio::task::spawn(gateway::serve(endpoint, n0des, listener));
         (addr, AbortOnDropHandle::new(task))
