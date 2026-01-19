@@ -22,6 +22,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Cargo check
+        # ui is checked through the bundle command
+        run: cargo test -p lib -p datum-connect --locked
+
       - name: Cargo test
         env:
           RUST_LOG: warn,lib=trace,iroh_proxy_utils=trace
