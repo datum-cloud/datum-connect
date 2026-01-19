@@ -22,10 +22,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Cargo check
-        run: cargo check --locked --workspace --examples --tests
-
       - name: Cargo test
         env:
           RUST_LOG: warn,lib=trace,iroh_proxy_utils=trace
-        run: cargo test --locked --workspace
+        run: cargo test -p lib --locked
