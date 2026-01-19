@@ -42,7 +42,11 @@ async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
         (addr, AbortOnDropHandle::new(task))
     };
 
-    let client = reqwest::Client::new();
+    let domain = format!("{codename}.localhost");
+    let client = reqwest::Client::builder()
+        .resolve_to_addrs(&domain, &[gateway_addr])
+        .build()
+        .unwrap();
     let res = client
         .get(format!(
             "http://{codename}.localhost:{}/hello",
