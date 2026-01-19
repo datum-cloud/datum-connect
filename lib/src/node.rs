@@ -1,29 +1,32 @@
-use iroh::protocol::Router;
-use iroh::{Endpoint, EndpointId, SecretKey};
+use std::{
+    fmt::Debug,
+    net::SocketAddr,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+
+use iroh::{Endpoint, EndpointId, SecretKey, protocol::Router};
 use iroh_n0des::ApiSecret;
-use iroh_proxy_utils::downstream::{DownstreamProxy, EndpointAuthority, ProxyMode};
-use iroh_proxy_utils::upstream::{AuthError, AuthHandler, UpstreamProxy};
+use iroh_proxy_utils::{ALPN as IROH_HTTP_CONNECT_ALPN, HttpProxyRequest, HttpProxyRequestKind};
+use iroh_proxy_utils::{
+    downstream::{DownstreamProxy, EndpointAuthority, ProxyMode},
+    upstream::{AuthError, AuthHandler, UpstreamProxy},
+};
 use n0_error::{AnyError, Result, StackResultExt, StdResultExt, stack_error};
-use n0_future::task::AbortOnDropHandle;
-use n0_future::{IterExt, StreamExt};
-use std::fmt::Debug;
-use std::net::SocketAddr;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::vec;
-use tokio::net::TcpListener;
-use tokio::sync::broadcast;
-use tokio::sync::futures::Notified;
-use tokio::task::JoinHandle;
+use n0_future::{IterExt, StreamExt, task::AbortOnDropHandle};
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, futures::Notified},
+    task::JoinHandle,
+};
 use tracing::{Instrument, debug, error, error_span, info, instrument, warn};
 use ttl_cache::TtlCache;
 
-use iroh_proxy_utils::{ALPN as IROH_HTTP_CONNECT_ALPN, HttpProxyRequest, HttpProxyRequestKind};
-
-use crate::state::AdvertismentTicket;
-use crate::{Advertisment, ProxyState, StateWrapper, TcpProxyData};
-use crate::{Repo, config::Config};
+use crate::{
+    Advertisment, ProxyState, Repo, StateWrapper, TcpProxyData, config::Config,
+    state::AdvertismentTicket,
+};
 
 const TICKET_TTL: Duration = Duration::from_secs(30);
 
@@ -58,13 +61,17 @@ pub struct ListenNode {
 }
 
 impl ListenNode {
-    #[instrument("listen-node", skip_all)]
     pub async fn new(repo: Repo) -> Result<Self> {
+        let n0des_api_secret = n0des_api_secret_from_env()?;
+        Self::with_n0des_api_secret(repo, n0des_api_secret).await
+    }
+
+    #[instrument("listen-node", skip_all)]
+    pub async fn with_n0des_api_secret(repo: Repo, n0des_api_secret: ApiSecret) -> Result<Self> {
         let config = repo.config().await?;
         let secret_key = repo.listen_key().await?;
-        let endpoint =
-            build_endpoint(secret_key, &config, vec![IROH_HTTP_CONNECT_ALPN.to_vec()]).await?;
-        let n0des = build_n0des_client(&endpoint).await?;
+        let endpoint = build_endpoint(secret_key, &config).await?;
+        let n0des = build_n0des_client(&endpoint, n0des_api_secret).await?;
 
         let state = repo.load_state().await?;
 
@@ -189,6 +196,10 @@ impl ListenNode {
         debug!("announced {count} proxies");
     }
 
+    pub fn endpoint(&self) -> &Endpoint {
+        self.router.endpoint()
+    }
+
     pub fn endpoint_id(&self) -> EndpointId {
         self.router.endpoint().id()
     }
@@ -274,12 +285,17 @@ pub struct ConnectNode {
 }
 
 impl ConnectNode {
-    #[instrument("connect-node", skip_all)]
     pub async fn new(repo: Repo) -> Result<Self> {
+        let n0des_api_secret = n0des_api_secret_from_env()?;
+        Self::with_n0des_api_secret(repo, n0des_api_secret).await
+    }
+
+    #[instrument("connect-node", skip_all)]
+    pub async fn with_n0des_api_secret(repo: Repo, n0des_api_secret: ApiSecret) -> Result<Self> {
         let config = repo.config().await?;
         let secret_key = repo.connect_key().await?;
-        let endpoint = build_endpoint(secret_key, &config, vec![]).await?;
-        let n0des = build_n0des_client(&endpoint).await?;
+        let endpoint = build_endpoint(secret_key, &config).await?;
+        let n0des = build_n0des_client(&endpoint, n0des_api_secret).await?;
         let tickets = TicketClient::new(n0des);
         let pool = DownstreamProxy::new(endpoint.clone(), Default::default());
         Ok(Self {
@@ -358,12 +374,8 @@ impl OutboundProxyHandle {
 
 /// Build a new iroh endpoint, applying all relevant details from Configuration
 /// to the base endpoint setup
-pub(crate) async fn build_endpoint(
-    secret_key: SecretKey,
-    common: &Config,
-    alpns: Vec<Vec<u8>>,
-) -> Result<Endpoint> {
-    let mut builder = Endpoint::builder().secret_key(secret_key).alpns(alpns);
+pub(crate) async fn build_endpoint(secret_key: SecretKey, common: &Config) -> Result<Endpoint> {
+    let mut builder = Endpoint::builder().secret_key(secret_key);
     if let Some(addr) = common.ipv4_addr {
         builder = builder.bind_addr_v4(addr);
     }
@@ -375,7 +387,7 @@ pub(crate) async fn build_endpoint(
     Ok(endpoint)
 }
 
-pub(crate) async fn build_n0des_client(endpoint: &Endpoint) -> Result<Arc<iroh_n0des::Client>> {
+pub(crate) fn n0des_api_secret_from_env() -> Result<ApiSecret> {
     let api_secret_str = match std::env::var("N0DES_API_SECRET") {
         Ok(s) => s,
         Err(_) => match option_env!("BUILD_N0DES_API_SECRET") {
@@ -385,6 +397,13 @@ pub(crate) async fn build_n0des_client(endpoint: &Endpoint) -> Result<Arc<iroh_n
     };
     let api_secret = ApiSecret::from_str(&api_secret_str)
         .context("Failed to parse n0des API secret from env variable N0DES_API_SECRET")?;
+    Ok(api_secret)
+}
+
+pub(crate) async fn build_n0des_client(
+    endpoint: &Endpoint,
+    api_secret: ApiSecret,
+) -> Result<Arc<iroh_n0des::Client>> {
     let remote_id = api_secret.remote.id;
     debug!(remote=%remote_id.fmt_short(), "connecting to n0des endpoint");
     let client = iroh_n0des::Client::builder(endpoint)

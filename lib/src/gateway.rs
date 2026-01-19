@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr};
+use std::{io, net::SocketAddr, sync::Arc};
 
 use askama::Template;
 use hyper::StatusCode;
@@ -17,34 +17,37 @@ use tokio::{
 };
 use tracing::{debug, info};
 
-use crate::{FetchTicketError, TicketClient, build_endpoint, build_n0des_client};
+use crate::{
+    FetchTicketError, TicketClient, build_endpoint, build_n0des_client, n0des_api_secret_from_env,
+};
 
 pub async fn bind_and_serve(
     secret_key: SecretKey,
     config: crate::config::Config,
     tcp_bind_addr: SocketAddr,
 ) -> Result<()> {
-    let endpoint = build_endpoint(secret_key, &config, vec![]).await?;
-    let n0des = build_n0des_client(&endpoint).await?;
-
-    let tickets = TicketClient::new(n0des);
-    serve(endpoint, tickets, tcp_bind_addr).await
+    let listener = TcpListener::bind(tcp_bind_addr).await?;
+    let endpoint = build_endpoint(secret_key, &config).await?;
+    let n0des_api_secret = n0des_api_secret_from_env()?;
+    let n0des = build_n0des_client(&endpoint, n0des_api_secret).await?;
+    serve(endpoint, n0des, listener).await
 }
 
 pub async fn serve(
     endpoint: Endpoint,
-    tickets: TicketClient,
-    tcp_bind_addr: SocketAddr,
+    n0des: Arc<iroh_n0des::Client>,
+    listener: TcpListener,
 ) -> Result<()> {
-    let listener = TcpListener::bind(tcp_bind_addr).await?;
+    let tcp_bind_addr = listener.local_addr()?;
     info!(?tcp_bind_addr, endpoint_id = %endpoint.id().fmt_short(),"TCP proxy gateway started");
 
     let proxy = DownstreamProxy::new(endpoint, Default::default());
+    let tickets = TicketClient::new(n0des);
     let resolver = Resolver { tickets };
     let opts = HttpProxyOpts::default()
         // Right now the gatewy functions as a reverse proxy, i.e. incoming requests are regular origin-form HTTP
         // requests, and we resolve the destination from the host header's subdomain.
-        // Once envoy takes over this part, we will use [`HttpProxyOpts::forward`] instead, i.e. expect CONNECT
+        // Once envoy takes over this part, we will use [`HttpProxyOpts::forward`] instead, i.e. accept CONNECT
         // requests only.
         .reverse(resolver)
         .error_response_writer(ErrorResponseWriter);
@@ -154,7 +157,6 @@ impl WriteErrorResponse for ErrorResponseWriter {
         }
         .render()
         .unwrap_or(title);
-        // let html_body = include_str!("../static/gateway_not_found.html");
         writer.write_all(res.status_line().as_bytes()).await?;
         let headers = format!(
             "Content-Type: text/html\r\nContent-Length: {}\r\n\r\n",
@@ -163,5 +165,35 @@ impl WriteErrorResponse for ErrorResponseWriter {
         writer.write_all(headers.as_bytes()).await?;
         writer.write_all(html.as_bytes()).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_subdomain;
+
+    #[test]
+    fn extract_subdomain_from_host_with_port() {
+        assert_eq!(extract_subdomain("alpha.example.test:8080"), Some("alpha"));
+    }
+
+    #[test]
+    fn extract_subdomain_from_host_without_port() {
+        assert_eq!(extract_subdomain("beta.example.test"), Some("beta"));
+    }
+
+    #[test]
+    fn extract_subdomain_rejects_ip() {
+        assert_eq!(extract_subdomain("127.0.0.1:8080"), None);
+    }
+
+    #[test]
+    fn extract_subdomain_returns_none_without_dot() {
+        assert_eq!(extract_subdomain("localhost:8080"), None);
+    }
+
+    #[test]
+    fn extract_subdomain_rejects_ipv6_literal() {
+        assert_eq!(extract_subdomain("[::1]:8080"), None);
     }
 }
