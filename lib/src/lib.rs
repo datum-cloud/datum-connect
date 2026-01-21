@@ -1,4 +1,5 @@
 mod auth;
+pub mod heartbeat;
 pub mod config;
 pub mod datum_cloud;
 pub mod gateway;
@@ -12,6 +13,9 @@ pub use project_control_plane::{ProjectControlPlaneClient, ProjectControlPlaneMa
 pub use repo::Repo;
 pub use state::*;
 pub use config::{Config, DiscoveryMode, GatewayConfig, GatewayMode};
+pub use heartbeat::{
+    AuthenticatedLeaseClient, HeartbeatAgent, HeartbeatConfig, LeaseClient, NoopLeaseClient,
+};
 
 /// The root domain for datum connect urls to subdomain from. A proxy URL will
 /// be a three-word-codename subdomain off this URL. eg: "https://vast-gold-mine.iroh.datum.net"

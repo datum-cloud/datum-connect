@@ -1,8 +1,10 @@
 use lib::{
-    SelectedContext,
+    AuthenticatedLeaseClient, HeartbeatAgent, NoopLeaseClient, SelectedContext,
     datum_cloud::{ApiEnv, DatumCloudClient, LoginState},
     ListenNode, Node, ProjectControlPlaneClient, ProjectControlPlaneManager, Repo,
 };
+use n0_future::task::AbortOnDropHandle;
+use std::sync::Arc;
 use tracing::info;
 
 #[derive(derive_more::Debug, Clone)]
@@ -10,6 +12,7 @@ pub struct AppState {
     node: Node,
     datum: DatumCloudClient,
     project_control_plane: ProjectControlPlaneManager,
+    _heartbeat_task: Option<Arc<AbortOnDropHandle<()>>>,
 }
 
 impl AppState {
@@ -17,15 +20,32 @@ impl AppState {
         let repo_path = Repo::default_location();
         info!(repo_path = %repo_path.display(), "ui: loading repo");
         let repo = Repo::open_or_create(repo_path).await?;
-        let (node, datum) = tokio::try_join! {
+        let (node, datum, config) = tokio::try_join! {
             Node::new(repo.clone()),
-            DatumCloudClient::with_repo(ApiEnv::Staging, repo)
+            DatumCloudClient::with_repo(ApiEnv::Staging, repo.clone()),
+            repo.config(),
         }?;
-        let project_control_plane = ProjectControlPlaneManager::new(datum.clone());
+        let heartbeat = if config.heartbeat_enabled {
+            let lease_client =
+                AuthenticatedLeaseClient::new(datum.clone(), NoopLeaseClient::default());
+            let login_rx = datum.auth().login_state_watch();
+            Some(Arc::new(
+                HeartbeatAgent::new(
+                    node.listen.endpoint_id().to_string(),
+                    std::sync::Arc::new(lease_client),
+                    login_rx,
+                )
+                .spawn(),
+            ))
+        } else {
+            None
+        };
+
         let app_state = AppState {
             node,
             datum,
-            project_control_plane,
+            project_control_plane: ProjectControlPlaneManager::new(datum.clone()),
+            _heartbeat_task: heartbeat,
         };
         if app_state.datum.login_state() != LoginState::Missing {
             let selected = app_state
