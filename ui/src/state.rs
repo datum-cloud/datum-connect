@@ -1,5 +1,5 @@
 use lib::{
-    HeartbeatAgent, SelectedContext,
+    SelectedContext,
     datum_cloud::{ApiEnv, DatumCloudClient},
     ListenNode, Node, ProjectControlPlaneClient, Repo,
 };
@@ -9,7 +9,6 @@ use tracing::info;
 pub struct AppState {
     node: Node,
     datum: DatumCloudClient,
-    heartbeat: HeartbeatAgent,
 }
 
 impl AppState {
@@ -21,12 +20,9 @@ impl AppState {
             Node::new(repo.clone()),
             DatumCloudClient::with_repo(ApiEnv::Staging, repo)
         }?;
-        let heartbeat = HeartbeatAgent::new(datum.clone(), node.listen.clone());
-        heartbeat.start().await;
         let app_state = AppState {
             node,
             datum,
-            heartbeat,
         };
         Ok(app_state)
     }
@@ -37,10 +33,6 @@ impl AppState {
 
     pub fn node(&self) -> &Node {
         &self.node
-    }
-
-    pub fn heartbeat(&self) -> &HeartbeatAgent {
-        &self.heartbeat
     }
 
     pub async fn project_control_plane(
