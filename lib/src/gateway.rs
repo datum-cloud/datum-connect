@@ -1,4 +1,6 @@
-use std::{io, net::SocketAddr, str::FromStr};
+use std::{io, net::SocketAddr, path::Path, str::FromStr};
+
+use std::os::unix::fs::PermissionsExt;
 
 use askama::Template;
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
@@ -13,8 +15,11 @@ use iroh_proxy_utils::{
     downstream::{Deny, DownstreamProxy, ErrorResponder, HttpProxyOpts, ProxyMode, RequestHandler},
 };
 use n0_error::Result;
-use tokio::net::TcpListener;
-use tracing::info;
+use tokio::{
+    io::copy_bidirectional,
+    net::{TcpListener, TcpStream, UnixListener},
+};
+use tracing::{info, warn};
 
 use crate::build_endpoint;
 
@@ -26,6 +31,25 @@ pub async fn bind_and_serve(
     let listener = TcpListener::bind(tcp_bind_addr).await?;
     let endpoint = build_endpoint(secret_key, &config.common).await?;
     serve(endpoint, listener).await
+}
+
+pub async fn bind_and_serve_unix(
+    secret_key: SecretKey,
+    config: crate::config::GatewayConfig,
+    socket_path: &Path,
+) -> Result<()> {
+    if let Some(parent) = socket_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if let Err(err) = std::fs::remove_file(socket_path) {
+        if err.kind() != io::ErrorKind::NotFound {
+            return Err(err.into());
+        }
+    }
+    let listener = UnixListener::bind(socket_path)?;
+    std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o777))?;
+    let endpoint = build_endpoint(secret_key, &config.common).await?;
+    serve_unix(endpoint, listener).await
 }
 
 pub async fn serve(endpoint: Endpoint, listener: TcpListener) -> Result<()> {
@@ -40,6 +64,43 @@ pub async fn serve(endpoint: Endpoint, listener: TcpListener) -> Result<()> {
     let mode =
         ProxyMode::Http(HttpProxyOpts::new(HeaderResolver).error_responder(ErrorResponseWriter));
     proxy.forward_tcp_listener(listener, mode).await
+}
+
+pub async fn serve_unix(endpoint: Endpoint, listener: UnixListener) -> Result<()> {
+    let proxy = DownstreamProxy::new(endpoint, Default::default());
+    let mode =
+        ProxyMode::Http(HttpProxyOpts::new(HeaderResolver).error_responder(ErrorResponseWriter));
+
+    let tcp_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let tcp_bind_addr = tcp_listener.local_addr()?;
+    info!(
+        ?tcp_bind_addr,
+        socket = %listener.local_addr()?.as_pathname().unwrap_or_else(|| Path::new("<unknown>")).display(),
+        "TCP proxy gateway started (unix socket)"
+    );
+
+    tokio::spawn(async move {
+        if let Err(err) = proxy.forward_tcp_listener(tcp_listener, mode).await {
+            warn!("Downstream proxy listener failed: {err:#}");
+        }
+    });
+
+    loop {
+        let (mut unix_stream, _) = listener.accept().await?;
+        let tcp_addr = tcp_bind_addr;
+        tokio::spawn(async move {
+            match TcpStream::connect(tcp_addr).await {
+                Ok(mut tcp_stream) => {
+                    if let Err(err) = copy_bidirectional(&mut unix_stream, &mut tcp_stream).await {
+                        warn!("Unix socket proxy connection failed: {err:#}");
+                    }
+                }
+                Err(err) => {
+                    warn!("Failed to connect to local gateway listener: {err:#}");
+                }
+            }
+        });
+    }
 }
 
 const HEADER_NODE_ID: &str = "x-iroh-endpoint-id";
