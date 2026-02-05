@@ -116,6 +116,10 @@ pub fn Sidebar() -> Element {
         Ok(auth) => auth.profile.email.clone(),
         Err(_) => "Not logged in".to_string(),
     };
+    let avatar_url = match auth_state.get() {
+        Ok(auth) => auth.profile.avatar_url.clone(),
+        Err(_) => None,
+    };
     let mut logout = use_action(move |_: ()| {
         let mut auth_changed = auth_changed.clone();
         async move {
@@ -195,22 +199,29 @@ pub fn Sidebar() -> Element {
                         on_open_change: move |v| profile_menu_open.set(Some(v)),
                         disabled: use_signal(|| false),
                         DropdownMenuTrigger { class: "flex items-center gap-1 justify-start focus:outline-2 focus:outline-app-border/50",
-                            div { class: "w-9 h-9 rounded-lg border border-app-border bg-white flex items-center justify-center cursor-default",
-                                svg {
-                                    width: "18",
-                                    height: "18",
-                                    view_box: "0 0 24 24",
-                                    fill: "none",
-                                    path {
-                                        d: "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z",
-                                        stroke: "currentColor",
-                                        stroke_width: "1.6",
+                            div { class: "w-9 h-9 rounded-lg border border-app-border bg-white flex items-center justify-center cursor-default overflow-hidden",
+                                if avatar_url.is_some() {
+                                    img {
+                                        src: "{avatar_url.as_deref().unwrap_or(\"\")}",
+                                        class: "object-cover w-full h-full",
                                     }
-                                    path {
-                                        d: "M4 21c1.6-3.5 4.6-5 8-5s6.4 1.5 8 5",
-                                        stroke: "currentColor",
-                                        stroke_width: "1.6",
-                                        stroke_linecap: "round",
+                                } else {
+                                    svg {
+                                        width: "18",
+                                        height: "18",
+                                        view_box: "0 0 24 24",
+                                        fill: "none",
+                                        path {
+                                            d: "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z",
+                                            stroke: "currentColor",
+                                            stroke_width: "1.6",
+                                        }
+                                        path {
+                                            d: "M4 21c1.6-3.5 4.6-5 8-5s6.4 1.5 8 5",
+                                            stroke: "currentColor",
+                                            stroke_width: "1.6",
+                                            stroke_linecap: "round",
+                                        }
                                     }
                                 }
                             }
