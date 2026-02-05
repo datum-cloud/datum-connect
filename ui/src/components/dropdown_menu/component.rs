@@ -1,9 +1,33 @@
 use dioxus::prelude::*;
-use dioxus_primitives::dropdown_menu::{
-    self, DropdownMenuContentProps, DropdownMenuProps, DropdownMenuTriggerProps,
-};
+use dioxus_primitives::dropdown_menu::{self, DropdownMenuProps, DropdownMenuTriggerProps};
 
 use crate::components::icon::{Icon, IconSource};
+
+/// Vertical position of the dropdown content relative to the trigger.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DropdownSide {
+    Top,
+    Bottom,
+}
+
+/// Horizontal alignment of the dropdown content relative to the trigger (Start = left, End = right).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DropdownAlign {
+    Start,
+    End,
+}
+
+fn dropdown_position_class(side: Option<DropdownSide>, align: Option<DropdownAlign>) -> String {
+    let vertical = match side {
+        None | Some(DropdownSide::Bottom) => "top-full mt-1",
+        Some(DropdownSide::Top) => "bottom-full mb-1",
+    };
+    let horizontal = match align {
+        None | Some(DropdownAlign::End) => "right-0",
+        Some(DropdownAlign::Start) => "left-0",
+    };
+    format!("{} {}", vertical, horizontal)
+}
 
 /// Dark backdrop when dropdown is open (same style as dialog). Only visible when using controlled `open` state.
 const BACKDROP_CLASS: &str = "fixed inset-0 bg-foreground/30 z-40 rounded-b-md animate-in fade-in duration-100";
@@ -37,15 +61,33 @@ pub fn DropdownMenuTrigger(props: DropdownMenuTriggerProps) -> Element {
     }
 }
 
+#[derive(Props, Clone, PartialEq)]
+pub struct DropdownMenuContentProps {
+    pub id: ReadSignal<Option<String>>,
+    #[props(default)]
+    pub attributes: Vec<Attribute>,
+    /// Extra class names (e.g. "min-w-44"). Base and position classes are applied automatically.
+    #[props(default = None)]
+    pub class: Option<String>,
+    #[props(default = None)]
+    pub side: Option<DropdownSide>,
+    #[props(default = None)]
+    pub align: Option<DropdownAlign>,
+    pub children: Element,
+}
+
+const DROPDOWN_CONTENT_BASE: &str =
+    "absolute min-w-36 rounded-md border-[#dfe3ea] bg-white shadow-card overflow-hidden z-9999999 p-1 animate-in fade-in duration-300";
+
 #[component]
 pub fn DropdownMenuContent(props: DropdownMenuContentProps) -> Element {
+    let position_class = dropdown_position_class(props.side, props.align);
+    let class = match &props.class {
+        Some(c) => format!("{} {} {}", DROPDOWN_CONTENT_BASE, position_class, c),
+        None => format!("{} {}", DROPDOWN_CONTENT_BASE, position_class),
+    };
     rsx! {
-        dropdown_menu::DropdownMenuContent {
-            id: props.id,
-            attributes: props.attributes,
-            class: "absolute right-0 min-w-36 top-0 rounded-md border-[#dfe3ea] bg-white shadow-card overflow-hidden z-9999999 p-1 animate-in fade-in duration-300",
-            {props.children}
-        }
+        dropdown_menu::DropdownMenuContent { id: props.id, attributes: props.attributes, class, {props.children} }
     }
 }
 

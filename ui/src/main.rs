@@ -83,8 +83,8 @@ fn main() {
                     .with_window(
                         WindowBuilder::new()
                             .with_title("")
-                            .with_inner_size(LogicalSize::new(630, 600))  // default width, height (logical pixels)
-                            .with_min_inner_size(LogicalSize::new(630, 600))  // prevent resizing smaller
+                            .with_inner_size(LogicalSize::new(700, 600))  // default width, height (logical pixels)
+                            .with_min_inner_size(LogicalSize::new(700, 600))  // prevent resizing smaller
                             .with_resizable(false)
                             .with_window_icon(Some(window_icon()))
                             .with_transparent(true)
@@ -134,7 +134,28 @@ fn App() -> Element {
     {
         use_effect(|| {
             set_macos_menu_name();
-            set_macos_window_decorations();
+            // Try to set decorations with multiple retries to ensure window is ready
+            // Use exponential backoff: 10ms, 50ms, 100ms, 200ms, 500ms
+            spawn(async move {
+                for delay_ms in [10, 50, 100, 200, 500] {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                    set_macos_window_decorations();
+                }
+            });
+        });
+        
+        // Also apply decorations when app state becomes ready (window should be ready by then)
+        use_effect(move || {
+            if app_state_ready() {
+                spawn(async move {
+                    // Small delay to ensure window is fully rendered
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    set_macos_window_decorations();
+                    // One more retry after a longer delay
+                    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+                    set_macos_window_decorations();
+                });
+            }
         });
     }
 
@@ -146,7 +167,16 @@ fn App() -> Element {
                 let _ = open::that("https://datum.net");
             }
             "Show Window" => {
-                use_window().set_visible(true);
+                let window = use_window();
+                window.set_visible(true);
+                // Reapply decorations when window is shown (in case they didn't apply initially)
+                #[cfg(target_os = "macos")]
+                {
+                    spawn(async move {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        set_macos_window_decorations();
+                    });
+                }
             }
             "Hide" => {
                 use_window().set_visible(false);
@@ -367,6 +397,8 @@ fn set_macos_menu_name() {
 }
 
 /// Customize macOS window decorations/titlebar appearance.
+/// This function is designed to be called multiple times safely - it will apply settings
+/// even if called repeatedly.
 #[cfg(all(feature = "desktop", target_os = "macos"))]
 fn set_macos_window_decorations() {
     use std::ffi::CStr;
@@ -388,26 +420,17 @@ fn set_macos_window_decorations() {
         if let Some(ns_window) = ns_window {
             let ns_window_ref: &objc2::runtime::NSObject = ns_window.as_ref();
             
-            // Set titlebar appearance to dark (use "NSAppearanceNameDarkAqua" for dark, "NSAppearanceNameAqua" for light)
-            let appearance_name = NSString::from_str("NSAppearanceNameDarkAqua");
-            let appearance_class_name = CStr::from_bytes_with_nul(b"NSAppearance\0").unwrap();
-            let appearance_class = AnyClass::get(appearance_class_name).expect("NSAppearance class should exist");
-            let appearance_name_ref: &NSString = appearance_name.as_ref();
-            let appearance: objc2::rc::Retained<objc2::runtime::NSObject> = 
-                objc2::msg_send![appearance_class, appearanceNamed: appearance_name_ref];
+            // Check if window is ready by verifying it has a content view
+            // This helps ensure the window is fully initialized
+            let content_view: Option<objc2::rc::Retained<objc2::runtime::NSObject>> = 
+                objc2::msg_send![ns_window_ref, contentView];
             
-            // Set the window's appearance (controls titlebar color)
-            let appearance_ref: &objc2::runtime::NSObject = appearance.as_ref();
-            let _: () = objc2::msg_send![ns_window_ref, setAppearance: appearance_ref];
+            if content_view.is_none() {
+                // Window not ready yet, will be retried
+                return;
+            }
             
-            // Make titlebar transparent so we can customize it
-            let _: () = objc2::msg_send![ns_window_ref, setTitlebarAppearsTransparent: true];
-            
-            // Hide the title (since we have custom controls)
-            // NSWindowTitleHidden = 1
-            let _: () = objc2::msg_send![ns_window_ref, setTitleVisibility: 1u64];
-            
-            // Set window background color (affects titlebar area when transparent)
+            // Set window background color FIRST (affects titlebar area when transparent)
             // Using #efefed - glacier-mist-800
             // Converted hex to sRGB: (239/255, 239/255, 237/255) = (0.937, 0.937, 0.929)
             let color_class_name = CStr::from_bytes_with_nul(b"NSColor\0").unwrap();
@@ -417,6 +440,35 @@ fn set_macos_window_decorations() {
                 objc2::msg_send![color_class, colorWithSRGBRed: 239.0/255.0, green: 239.0/255.0, blue: 237.0/255.0, alpha: 1.0f64];
             let custom_color_ref: &objc2::runtime::NSObject = custom_color.as_ref();
             let _: () = objc2::msg_send![ns_window_ref, setBackgroundColor: custom_color_ref];
+            
+            // Make titlebar transparent so we can customize it (do this before setting appearance)
+            let _: () = objc2::msg_send![ns_window_ref, setTitlebarAppearsTransparent: true];
+            
+            // Hide the title (since we have custom controls)
+            // NSWindowTitleHidden = 1
+            let _: () = objc2::msg_send![ns_window_ref, setTitleVisibility: 1u64];
+            
+            // Set the window's appearance AFTER background color and transparency
+            // Use light appearance (NSAppearanceNameAqua) since our background is light
+            // This ensures the window controls and titlebar elements render correctly
+            let appearance_class_name = CStr::from_bytes_with_nul(b"NSAppearance\0").unwrap();
+            let appearance_class = AnyClass::get(appearance_class_name).expect("NSAppearance class should exist");
+            let appearance_name = NSString::from_str("NSAppearanceNameAqua");
+            let appearance_name_ref: &NSString = appearance_name.as_ref();
+            let appearance: objc2::rc::Retained<objc2::runtime::NSObject> = 
+                objc2::msg_send![appearance_class, appearanceNamed: appearance_name_ref];
+            let appearance_ref: &objc2::runtime::NSObject = appearance.as_ref();
+            let _: () = objc2::msg_send![ns_window_ref, setAppearance: appearance_ref];
+            
+            // Force the window to update its appearance and redraw
+            let _: () = objc2::msg_send![ns_window_ref, invalidateShadow];
+            let _: () = objc2::msg_send![ns_window_ref, display];
+            
+            // Also update the content view to ensure changes propagate
+            if let Some(content_view) = content_view {
+                let content_view_ref: &objc2::runtime::NSObject = content_view.as_ref();
+                let _: () = objc2::msg_send![content_view_ref, setNeedsDisplay: true];
+            }
         }
     }
 }

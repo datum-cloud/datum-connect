@@ -13,6 +13,13 @@ pub enum SelectAlign {
     End,
 }
 
+/// Vertical position of the select list relative to the trigger.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SelectSide {
+    Top,
+    Bottom,
+}
+
 /// Size variant for select components
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SelectSize {
@@ -62,7 +69,7 @@ impl Clone for SelectTriggerPropsWithSize {
 pub fn SelectTrigger(props: SelectTriggerPropsWithSize) -> Element {
     let class = match props.size {
         SelectSize::Default => "w-full h-9 min-w-0 rounded-md border border-app-border bg-white px-2 text-left text-xs text-foreground hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-app-border inline-flex items-center justify-between gap-2 cursor-default data-disabled:opacity-50 data-disabled:cursor-not-allowed",
-        SelectSize::Small => "w-full h-6 min-w-0 rounded-md border border-app-border bg-white px-2 text-left text-xs text-foreground hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-app-border inline-flex items-center justify-between gap-2 cursor-default data-disabled:opacity-50 data-disabled:cursor-not-allowed",
+        SelectSize::Small => "h-6 max-w-full rounded-md border border-app-border bg-white px-2 text-left text-xs text-foreground hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-app-border inline-flex items-center justify-between gap-2 cursor-default data-disabled:opacity-50 data-disabled:cursor-not-allowed",
     };
     
     rsx! {
@@ -91,6 +98,7 @@ pub fn SelectValue(props: SelectValueProps) -> Element {
 /// - Width follows longest item (w-max min-w-max), won't shrink below content.
 /// - Constrains max-height to viewport so the list scrolls instead of overflowing.
 /// - Pass `align` to position the list (start/center/end) relative to the trigger.
+/// - Pass `side` to open the list above (Top) or below (Bottom) the trigger.
 fn align_class(align: Option<SelectAlign>) -> &'static str {
     match align {
         None | Some(SelectAlign::Start) => "left-0 right-auto",
@@ -102,6 +110,7 @@ fn align_class(align: Option<SelectAlign>) -> &'static str {
 #[component]
 pub fn SelectList(
     #[props(default = None)] align: Option<SelectAlign>,
+    #[props(default = None)] side: Option<SelectSide>,
     #[props(default = None)] id: Option<String>,
     #[props(default = SelectSize::Default)]
     size: SelectSize,
@@ -111,9 +120,15 @@ pub fn SelectList(
         SelectSize::Default => "absolute z-[60] w-full min-w-full max-h-[min(20rem,calc(100vh-2rem))] overflow-y-auto overflow-x-auto rounded-md border border-app-border bg-white shadow-card p-1 animate-in fade-in duration-300 outline-none focus:outline-none top-full mt-1 data-[side=top]:top-auto data-[side=top]:bottom-full data-[side=top]:mt-0 data-[side=top]:mb-1 data-[side=bottom]:bottom-auto data-[side=bottom]:top-full data-[side=bottom]:mb-0 data-[side=bottom]:mt-1",
         SelectSize::Small => "absolute z-[60] w-max min-w-max max-w-[20rem,calc(100vw-2rem)] max-h-[min(20rem,calc(100vh-2rem))] overflow-y-auto overflow-x-auto rounded-md border border-app-border bg-white shadow-card p-0.5 animate-in fade-in duration-300 outline-none focus:outline-none top-full mt-1 data-[side=top]:top-auto data-[side=top]:bottom-full data-[side=top]:mt-0 data-[side=top]:mb-1 data-[side=bottom]:bottom-auto data-[side=bottom]:top-full data-[side=bottom]:mb-0 data-[side=bottom]:mt-1",
     };
+    let mut attrs = Vec::<Attribute>::new();
+    if side == Some(SelectSide::Top) {
+        attrs.push(Attribute::new("data-side", "top", None, false));
+    } else if side == Some(SelectSide::Bottom) {
+        attrs.push(Attribute::new("data-side", "bottom", None, false));
+    }
     let class = format!("{} {}", base_class, align_class(align));
     rsx! {
-        select::SelectList { class, id, attributes: vec![], {children} }
+        select::SelectList { class, id, attributes: attrs, {children} }
     }
 }
 
