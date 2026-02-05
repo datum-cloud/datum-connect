@@ -73,7 +73,7 @@ fn main() {
     #[cfg(feature = "desktop")]
     {
         // Use a custom titlebar so we can theme the top chrome (height + color).
-        use dioxus_desktop::{Config, LogicalSize, WindowBuilder, WindowCloseBehaviour};
+        use dioxus_desktop::{Config, LogicalSize, WindowBuilder, WindowCloseBehaviour, tao::platform::macos::WindowBuilderExtMacOS};
 
         dioxus::LaunchBuilder::desktop()
             .with_cfg(desktop! {
@@ -82,14 +82,13 @@ fn main() {
                     .with_close_behaviour(WindowCloseBehaviour::WindowHides)
                     .with_window(
                         WindowBuilder::new()
-                            .with_title("Datum")
+                            .with_title("")
                             .with_inner_size(LogicalSize::new(630, 600))  // default width, height (logical pixels)
                             .with_min_inner_size(LogicalSize::new(630, 600))  // prevent resizing smaller
                             .with_resizable(false)
-                            // Required for rounded app chrome: we render our own rounded container inside.
+                            .with_window_icon(Some(window_icon()))
                             .with_transparent(true)
-                            .with_decorations(false)
-                            .with_window_icon(Some(window_icon())),
+                            .with_has_shadow(true)
                     )
             })
             .launch(App);
@@ -130,11 +129,12 @@ fn App() -> Element {
         app_state_ready.set(true);
     });
 
-    // Set macOS menu bar name and dock icon after the app launches (run loop must be active)
+    // Set macOS menu bar name, dock icon, window corner radius, and decorations after the app launches (run loop must be active)
     #[cfg(all(feature = "desktop", target_os = "macos"))]
     {
         use_effect(|| {
             set_macos_menu_name();
+            set_macos_window_decorations();
         });
     }
 
@@ -236,23 +236,13 @@ fn window_icon() -> dioxus_desktop::tao::window::Icon {
         .expect("Failed to create window icon from image")
 }
 
-/// True when the executable is inside a .app bundle (e.g. production build).
-#[cfg(all(feature = "desktop", target_os = "macos"))]
-fn running_from_app_bundle() -> bool {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.canonicalize().ok())
-        .map(|p| p.to_string_lossy().contains(".app/Contents/MacOS/"))
-        .unwrap_or(false)
-}
-
-/// Custom Objective-C class to handle About menu action and route navigation
+/// Custom Objective-C class to handle menu actions
 #[cfg(all(feature = "desktop", target_os = "macos"))]
 mod macos_menu_handler {
     use objc2::runtime::NSObject;
     use objc2::{define_class, extern_methods};
     use objc2_foundation::{NSObject as FoundationNSObject, NSString, NSURL};
-    use objc2_app_kit::{NSWorkspace};
+    use objc2_app_kit::NSWorkspace;
     use objc2::rc::Retained;
 
     define_class!(
@@ -273,6 +263,11 @@ mod macos_menu_handler {
                 }
             }
 
+            #[unsafe(method(checkForUpdates:))]
+            fn check_for_updates(&self, _sender: Option<&NSObject>) {
+                // Placeholder for check for updates functionality
+                // TODO: Implement update checking
+            }
         }
     );
 
@@ -285,14 +280,14 @@ mod macos_menu_handler {
     }
 }
 
-/// Set the macOS menu bar app name and add standard app menu items (About, Hide, Quit).
+/// Set the macOS menu bar app name and add custom menu items.
 #[cfg(all(feature = "desktop", target_os = "macos"))]
 fn set_macos_menu_name() {
     use std::ffi::CStr;
     use std::sync::Once;
     use objc2::runtime::Sel;
-    use objc2::{ClassType, MainThreadMarker, MainThreadOnly};
-    use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
+    use objc2::{ClassType, MainThreadMarker};
+    use objc2_app_kit::{NSApplication, NSMenuItem};
     use objc2_foundation::NSString;
 
     // SAFETY: We're on the main thread (called from use_effect in the UI)
@@ -306,7 +301,7 @@ fn set_macos_menu_name() {
         if let Some(app_menu_item) = main_menu.itemAtIndex(0) {
             app_menu_item.setTitle(&app_name);
 
-            // Also update the submenu title and add standard items (only once)
+            // Also update the submenu title and add custom items
             if let Some(app_submenu) = app_menu_item.submenu() {
                 app_submenu.setTitle(&app_name);
 
@@ -322,23 +317,10 @@ fn set_macos_menu_name() {
                     let handler = macos_menu_handler::MenuActionHandler::new();
                     HANDLER.set(handler.clone()).ok();
 
-                    // Remove any existing icons from menu items
-                    let item_count = app_submenu.numberOfItems();
-
-                    for i in 0..item_count {
-                        if let Some(item) = app_submenu.itemAtIndex(i) {
-                            unsafe {
-                                item.setImage(None);
-                                item.setOnStateImage(None);
-                                item.setOffStateImage(None);
-                            }
-                        }
-                    }
+                    let empty_key = NSString::from_str("");
 
                     // Add "About Datum" at the beginning
                     let about_title = NSString::from_str("About Datum");
-                    let empty_key = NSString::from_str("");
-                    // SAFETY: openAboutURL: is a valid selector on our custom handler
                     unsafe {
                         let about_sel =
                             Sel::register(CStr::from_bytes_with_nul(b"openAboutURL:\0").unwrap());
@@ -351,7 +333,6 @@ fn set_macos_menu_name() {
                             );
                         about_item.setTarget(Some(&*handler));
                         about_item.setImage(None);
-                        // Also clear state images to ensure no icons appear
                         about_item.setOnStateImage(None);
                         about_item.setOffStateImage(None);
                     }
@@ -362,144 +343,80 @@ fn set_macos_menu_name() {
                         app_submenu.insertItem_atIndex(&separator, 1);
                     }
 
-                    // Add "Hide Datum" (Cmd+H), "Hide Others" (Option+Cmd+H), and "Show All"
-                    let hide_title = NSString::from_str("Hide Datum");
-                    let hide_others_title = NSString::from_str("Hide Others");
-                    let show_all_title = NSString::from_str("Show All");
-                    let quit_title = NSString::from_str("Quit Datum");
-                    let key_h = NSString::from_str("h");
-                    let key_q = NSString::from_str("q");
-                    let count = app_submenu.numberOfItems();
-                    // SAFETY: hide:, hideOtherApplications:, unhideAllApplications:, and terminate: are valid selectors on NSApplication
+                    // Add "Check for Updates..." 
+                    let updates_title = NSString::from_str("Check for Updates...");
                     unsafe {
-                        // Hide Datum (Cmd+H)
-                        let hide_sel = Sel::register(CStr::from_bytes_with_nul(b"hide:\0").unwrap());
-                        let hide_item =
+                        let updates_sel =
+                            Sel::register(CStr::from_bytes_with_nul(b"checkForUpdates:\0").unwrap());
+                        let updates_item =
                             app_submenu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                                &hide_title,
-                                Some(hide_sel),
-                                &key_h,
-                                count,
-                            );
-                        hide_item.setKeyEquivalentModifierMask(NSEventModifierFlags::Command);
-                        hide_item.setImage(None);
-                        hide_item.setOnStateImage(None);
-                        hide_item.setOffStateImage(None);
-
-                        // Hide Others (Option+Cmd+H)
-                        let hide_others_sel = Sel::register(
-                            CStr::from_bytes_with_nul(b"hideOtherApplications:\0").unwrap(),
-                        );
-                        let hide_others_item =
-                            app_submenu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                                &hide_others_title,
-                                Some(hide_others_sel),
-                                &key_h,
-                                count + 1,
-                            );
-                        hide_others_item.setKeyEquivalentModifierMask(
-                            NSEventModifierFlags::Option | NSEventModifierFlags::Command,
-                        );
-                        hide_others_item.setImage(None);
-                        hide_others_item.setOnStateImage(None);
-                        hide_others_item.setOffStateImage(None);
-
-                        // Show All
-                        let show_all_sel = Sel::register(
-                            CStr::from_bytes_with_nul(b"unhideAllApplications:\0").unwrap(),
-                        );
-                        let show_all_item =
-                            app_submenu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                                &show_all_title,
-                                Some(show_all_sel),
+                                &updates_title,
+                                Some(updates_sel),
                                 &empty_key,
-                                count + 2,
+                                2,
                             );
-                        show_all_item.setImage(None);
-                        show_all_item.setOnStateImage(None);
-                        show_all_item.setOffStateImage(None);
-
-                        // Add separator before Quit
-                        let separator2 = NSMenuItem::separatorItem(mtm);
-                        app_submenu.insertItem_atIndex(&separator2, count + 3);
-
-                        // Quit Datum (Cmd+Q)
-                        let term_sel =
-                            Sel::register(CStr::from_bytes_with_nul(b"terminate:\0").unwrap());
-                        let quit_item =
-                            app_submenu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                                &quit_title,
-                                Some(term_sel),
-                                &key_q,
-                                count + 4,
-                            );
-                        quit_item.setKeyEquivalentModifierMask(NSEventModifierFlags::Command);
-                        quit_item.setImage(None);
-                        quit_item.setOnStateImage(None);
-                        quit_item.setOffStateImage(None);
-                    }
-
-                    // Add Edit menu with Paste (Cmd+V), Copy, Cut, Select All so keyboard shortcuts
-                    // work in text fields (e.g. search). Without this menu, Cmd+V does nothing.
-                    unsafe {
-                        let edit_menu = NSMenu::initWithTitle(
-                            NSMenu::alloc(mtm),
-                            &NSString::from_str("Edit"),
-                        );
-                        let key_v = NSString::from_str("v");
-                        let key_x = NSString::from_str("x");
-                        let key_c = NSString::from_str("c");
-                        let key_a = NSString::from_str("a");
-                        let paste_sel =
-                            Sel::register(CStr::from_bytes_with_nul(b"paste:\0").unwrap());
-                        let copy_sel =
-                            Sel::register(CStr::from_bytes_with_nul(b"copy:\0").unwrap());
-                        let cut_sel = Sel::register(CStr::from_bytes_with_nul(b"cut:\0").unwrap());
-                        let select_all_sel =
-                            Sel::register(CStr::from_bytes_with_nul(b"selectAll:\0").unwrap());
-                        let cmd = NSEventModifierFlags::Command;
-
-                        let paste_item = edit_menu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                            &NSString::from_str("Paste"),
-                            Some(paste_sel),
-                            &key_v,
-                            0,
-                        );
-                        paste_item.setKeyEquivalentModifierMask(cmd);
-                        let copy_item = edit_menu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                            &NSString::from_str("Copy"),
-                            Some(copy_sel),
-                            &key_c,
-                            1,
-                        );
-                        copy_item.setKeyEquivalentModifierMask(cmd);
-                        let cut_item = edit_menu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                            &NSString::from_str("Cut"),
-                            Some(cut_sel),
-                            &key_x,
-                            2,
-                        );
-                        cut_item.setKeyEquivalentModifierMask(cmd);
-                        let select_all_item =
-                            edit_menu.insertItemWithTitle_action_keyEquivalent_atIndex(
-                                &NSString::from_str("Select All"),
-                                Some(select_all_sel),
-                                &key_a,
-                                3,
-                            );
-                        select_all_item.setKeyEquivalentModifierMask(cmd);
-
-                        let edit_title_item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                            NSMenuItem::alloc(mtm),
-                            &NSString::from_str("Edit"),
-                            None,
-                            &NSString::from_str(""),
-                        );
-                        edit_title_item.setSubmenu(Some(&edit_menu));
-                        main_menu.insertItem_atIndex(&edit_title_item, 1);
+                        updates_item.setTarget(Some(&*handler));
+                        updates_item.setImage(None);
+                        updates_item.setOnStateImage(None);
+                        updates_item.setOffStateImage(None);
                     }
                 });
             }
+        }
+    }
+}
+
+/// Customize macOS window decorations/titlebar appearance.
+#[cfg(all(feature = "desktop", target_os = "macos"))]
+fn set_macos_window_decorations() {
+    use std::ffi::CStr;
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::NSString;
+    use objc2::runtime::AnyClass;
+
+    // SAFETY: We're on the main thread (called from use_effect in the UI)
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+
+    // Get the main window through NSApplication
+    let app = NSApplication::sharedApplication(mtm);
+    unsafe {
+        let app_ref: &NSApplication = app.as_ref();
+        let ns_window: Option<objc2::rc::Retained<objc2::runtime::NSObject>> = 
+            objc2::msg_send![app_ref, mainWindow];
+        
+        if let Some(ns_window) = ns_window {
+            let ns_window_ref: &objc2::runtime::NSObject = ns_window.as_ref();
+            
+            // Set titlebar appearance to dark (use "NSAppearanceNameDarkAqua" for dark, "NSAppearanceNameAqua" for light)
+            let appearance_name = NSString::from_str("NSAppearanceNameDarkAqua");
+            let appearance_class_name = CStr::from_bytes_with_nul(b"NSAppearance\0").unwrap();
+            let appearance_class = AnyClass::get(appearance_class_name).expect("NSAppearance class should exist");
+            let appearance_name_ref: &NSString = appearance_name.as_ref();
+            let appearance: objc2::rc::Retained<objc2::runtime::NSObject> = 
+                objc2::msg_send![appearance_class, appearanceNamed: appearance_name_ref];
+            
+            // Set the window's appearance (controls titlebar color)
+            let appearance_ref: &objc2::runtime::NSObject = appearance.as_ref();
+            let _: () = objc2::msg_send![ns_window_ref, setAppearance: appearance_ref];
+            
+            // Make titlebar transparent so we can customize it
+            let _: () = objc2::msg_send![ns_window_ref, setTitlebarAppearsTransparent: true];
+            
+            // Hide the title (since we have custom controls)
+            // NSWindowTitleHidden = 1
+            let _: () = objc2::msg_send![ns_window_ref, setTitleVisibility: 1u64];
+            
+            // Set window background color (affects titlebar area when transparent)
+            // Using #efefed - glacier-mist-800
+            // Converted hex to sRGB: (239/255, 239/255, 237/255) = (0.937, 0.937, 0.929)
+            let color_class_name = CStr::from_bytes_with_nul(b"NSColor\0").unwrap();
+            let color_class = AnyClass::get(color_class_name).expect("NSColor class should exist");
+            // #efefed converts to sRGB(239/255, 239/255, 237/255)
+            let custom_color: objc2::rc::Retained<objc2::runtime::NSObject> = 
+                objc2::msg_send![color_class, colorWithSRGBRed: 239.0/255.0, green: 239.0/255.0, blue: 237.0/255.0, alpha: 1.0f64];
+            let custom_color_ref: &objc2::runtime::NSObject = custom_color.as_ref();
+            let _: () = objc2::msg_send![ns_window_ref, setBackgroundColor: custom_color_ref];
         }
     }
 }

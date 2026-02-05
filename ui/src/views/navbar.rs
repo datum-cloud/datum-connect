@@ -26,8 +26,8 @@ pub struct OpenEditTunnelDialog {
 #[component]
 pub fn Chrome() -> Element {
     rsx! {
-        div { class: "h-screen overflow-hidden flex flex-col bg-content-background text-foreground rounded-[12px]",
-            HeaderBar {}
+        div { class: "h-screen overflow-hidden flex flex-col bg-content-background text-foreground border-t border-app-border",
+            // HeaderBar {}
             Outlet::<Route> {}
         }
     }
