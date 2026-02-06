@@ -4,7 +4,7 @@ mod dns_dev;
 mod tunnel_dev;
 
 use lib::{
-    Advertisment, AdvertismentTicket, ConnectNode, DiscoveryMode, ListenNode, ProxyState, Repo,
+    AddressLookupMode, Advertisment, AdvertismentTicket, ConnectNode, ListenNode, ProxyState, Repo,
     TcpProxyData,
     datum_cloud::{ApiEnv, DatumCloudClient},
 };
@@ -150,7 +150,7 @@ pub struct ServeArgs {
     pub port: u16,
     /// Discovery mode for connection details.
     #[clap(long, value_enum)]
-    pub discovery: Option<DiscoveryModeArg>,
+    pub address_lookup: Option<AddressLookupArg>,
     /// DNS origin for _iroh.<endpoint-id>.<origin> lookups.
     #[clap(long)]
     pub dns_origin: Option<String>,
@@ -166,7 +166,7 @@ pub enum GatewayModeArg {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum DiscoveryModeArg {
+pub enum AddressLookupArg {
     Default,
     Dns,
     Hybrid,
@@ -294,11 +294,11 @@ async fn main() -> n0_error::Result<()> {
             let bind_addr: SocketAddr = (args.bind_addr, args.port).into();
             let secret_key = repo.gateway_key().await?;
             let mut config = repo.gateway_config().await?;
-            if let Some(discovery) = args.discovery {
-                config.common.discovery_mode = match discovery {
-                    DiscoveryModeArg::Default => DiscoveryMode::Default,
-                    DiscoveryModeArg::Dns => DiscoveryMode::Dns,
-                    DiscoveryModeArg::Hybrid => DiscoveryMode::Hybrid,
+            if let Some(discovery) = args.address_lookup {
+                config.common.address_lookup = match discovery {
+                    AddressLookupArg::Default => AddressLookupMode::Default,
+                    AddressLookupArg::Dns => AddressLookupMode::Dns,
+                    AddressLookupArg::Hybrid => AddressLookupMode::Hybrid,
                 };
             }
             if let Some(origin) = args.dns_origin {
