@@ -16,17 +16,21 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
+use crate::ListenNode;
 use crate::datum_apis::connector::{
     Connector, ConnectorConnectionDetails, ConnectorConnectionDetailsPublicKey,
     ConnectorConnectionType, PublicKeyConnectorAddress, PublicKeyDiscoveryMode,
 };
 use crate::datum_apis::lease::Lease;
 use crate::datum_cloud::{DatumCloudClient, LoginState};
-use crate::ListenNode;
 
 type ProjectRunner = Arc<
-    dyn Fn(String, DatumCloudClient, Arc<dyn HeartbeatDetailsProvider>, CancellationToken)
-            -> tokio::task::JoinHandle<()>
+    dyn Fn(
+            String,
+            DatumCloudClient,
+            Arc<dyn HeartbeatDetailsProvider>,
+            CancellationToken,
+        ) -> tokio::task::JoinHandle<()>
         + Send
         + Sync,
 >;
@@ -362,11 +366,7 @@ async fn run_project(
         if cached.last_details.as_ref() != Some(&details_value) {
             let patch = json!({ "status": { "connectionDetails": details_value } });
             if let Err(err) = connectors
-                .patch_status(
-                    &cached.name,
-                    &PatchParams::default(),
-                    &Patch::Merge(&patch),
-                )
+                .patch_status(&cached.name, &PatchParams::default(), &Patch::Merge(&patch))
                 .await
             {
                 warn!(
@@ -590,10 +590,12 @@ mod tests {
     #[tokio::test]
     async fn register_project_idempotent() {
         let repo = crate::Repo::open_or_create(test_repo_path()).await.unwrap();
-        let datum =
-            crate::datum_cloud::DatumCloudClient::with_repo(crate::datum_cloud::ApiEnv::Staging, repo)
-                .await
-                .unwrap();
+        let datum = crate::datum_cloud::DatumCloudClient::with_repo(
+            crate::datum_cloud::ApiEnv::Staging,
+            repo,
+        )
+        .await
+        .unwrap();
         let provider = Arc::new(TestProvider {
             endpoint_id: "test-endpoint".to_string(),
         });

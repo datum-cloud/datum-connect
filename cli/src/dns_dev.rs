@@ -87,8 +87,7 @@ pub fn upsert(
     addrs: Vec<String>,
 ) -> n0_error::Result<()> {
     let mut config = if config_path.exists() {
-        serde_yml::from_str::<DnsDevConfig>(&fs::read_to_string(&config_path)?)
-            .anyerr()?
+        serde_yml::from_str::<DnsDevConfig>(&fs::read_to_string(&config_path)?).anyerr()?
     } else {
         DnsDevConfig {
             origin: origin.clone(),
@@ -126,8 +125,7 @@ pub fn upsert(
 
 fn build_catalog(config_path: &PathBuf, fallback_origin: &str) -> n0_error::Result<Catalog> {
     let config = if config_path.exists() {
-        serde_yml::from_str::<DnsDevConfig>(&fs::read_to_string(config_path)?)
-            .anyerr()?
+        serde_yml::from_str::<DnsDevConfig>(&fs::read_to_string(config_path)?).anyerr()?
     } else {
         DnsDevConfig {
             origin: fallback_origin.to_string(),
@@ -180,10 +178,7 @@ fn build_catalog(config_path: &PathBuf, fallback_origin: &str) -> n0_error::Resu
     }
 
     let mut catalog = Catalog::new();
-    catalog.upsert(
-        zone_name.into(),
-        vec![std::sync::Arc::new(authority)],
-    );
+    catalog.upsert(zone_name.into(), vec![std::sync::Arc::new(authority)]);
     Ok(catalog)
 }
 
@@ -229,11 +224,7 @@ impl hickory_server::server::RequestHandler for SharedCatalog {
         response_handle: R,
     ) -> hickory_server::server::ResponseInfo {
         let catalog = self.inner.inner.read().await;
-        hickory_server::server::RequestHandler::handle_request(
-            &*catalog,
-            request,
-            response_handle,
-        )
-        .await
+        hickory_server::server::RequestHandler::handle_request(&*catalog, request, response_handle)
+            .await
     }
 }

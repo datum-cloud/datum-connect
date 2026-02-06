@@ -69,8 +69,7 @@ impl ProjectControlPlaneClient {
             .parse()
             .std_context("Invalid project control plane URL")?;
         let mut config = Config::new(uri);
-        config.auth_info.token =
-            Some(SecretString::new(access_token.to_string().into_boxed_str()));
+        config.auth_info.token = Some(SecretString::new(access_token.to_string().into_boxed_str()));
         Client::try_from(config).std_context("Failed to create project control plane client")
     }
 
@@ -82,8 +81,7 @@ impl ProjectControlPlaneClient {
 
         let client = Self::build_kube_client(&self.server_url, access_token)?;
         self.client.store(Arc::new(client));
-        self.access_token
-            .store(Arc::new(access_token.to_string()));
+        self.access_token.store(Arc::new(access_token.to_string()));
         Ok(())
     }
 

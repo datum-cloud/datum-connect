@@ -7,9 +7,11 @@ use lib::SelectedContext;
 
 use crate::{
     components::{
-        Button,
-        select::{Select, SelectItemIndicator, SelectList, SelectOptionItem, SelectTrigger, SelectValue},
+        select::{
+            Select, SelectItemIndicator, SelectList, SelectOptionItem, SelectTrigger, SelectValue,
+        },
         skeleton::Skeleton,
+        Button,
     },
     state::AppState,
     Route,
@@ -88,10 +90,7 @@ pub fn SelectProject() -> Element {
             saving.set(true);
             save_error.set(None);
 
-            let org = match orgs_snapshot
-                .iter()
-                .find(|o| o.org.resource_id == org_id)
-            {
+            let org = match orgs_snapshot.iter().find(|o| o.org.resource_id == org_id) {
                 Some(org) => org,
                 None => {
                     save_error.set(Some("selected org not found".to_string()));
@@ -143,7 +142,7 @@ pub fn SelectProject() -> Element {
                 div { class: "text-sm mt-1 break-words", "{err}" }
             }
         }
-    } else if orgs.read().is_empty() { 
+    } else if orgs.read().is_empty() {
         rsx! {
             div { class: "flex flex-col gap-4 w-full",
                 div { class: "flex flex-col gap-2",

@@ -1,18 +1,22 @@
 use crate::{
     components::{
         dropdown_menu::{
-            DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+            DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+            DropdownMenuTrigger,
+        },
+        select::{
+            Select, SelectAlign, SelectItemIndicator, SelectList, SelectOptionItem, SelectSize,
+            SelectTrigger, SelectValue,
         },
         AddTunnelDialog, Button, ButtonKind, Icon, IconSource, InviteUserDialog,
-        select::{Select, SelectAlign, SelectItemIndicator, SelectList, SelectOptionItem, SelectSize, SelectTrigger, SelectValue},
     },
     state::AppState,
     Route,
 };
-use lib::datum_cloud::{LoginState, OrganizationWithProjects};
 use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
+use lib::datum_cloud::{LoginState, OrganizationWithProjects};
 use open::that;
 
 /// Provided by Sidebar so child routes (e.g. TunnelBandwidth) can open the Add/Edit tunnel dialog.
@@ -248,7 +252,9 @@ pub fn HeaderBar() -> Element {
         selected_org_snapshot
             .as_ref()
             .and_then(|org_id| {
-                orgs_snapshot.iter().find(|org| &org.org.resource_id == org_id)
+                orgs_snapshot
+                    .iter()
+                    .find(|org| &org.org.resource_id == org_id)
             })
             .map(|org| {
                 org.projects
@@ -451,5 +457,3 @@ pub fn HeaderBar() -> Element {
         }
     }
 }
-
-

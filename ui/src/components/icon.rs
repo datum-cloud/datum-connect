@@ -85,7 +85,11 @@ fn force_current_color(svg: &str) -> String {
 /// Injects width/100% height/100% and display:block into the first <svg tag so the icon fills its container and doesn't shift from baseline.
 fn svg_with_fill(svg: &str) -> String {
     let with_color = force_current_color(svg);
-    with_color.replacen("<svg", r#"<svg width="100%" height="100%" style="display:block;vertical-align:middle""#, 1)
+    with_color.replacen(
+        "<svg",
+        r#"<svg width="100%" height="100%" style="display:block;vertical-align:middle""#,
+        1,
+    )
 }
 
 #[component]
