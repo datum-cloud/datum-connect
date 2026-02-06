@@ -10,7 +10,7 @@ mod repo;
 mod state;
 pub mod tunnels;
 
-pub use config::{Config, DiscoveryMode, GatewayConfig};
+pub use config::{AddressLookupMode, Config, GatewayConfig};
 pub use heartbeat::HeartbeatAgent;
 pub use node::*;
 pub use project_control_plane::ProjectControlPlaneClient;

@@ -7,8 +7,8 @@ use std::{
 };
 
 use iroh::{
-    Endpoint, EndpointId, SecretKey, discovery::dns::DnsDiscovery, endpoint::default_relay_mode,
-    protocol::Router,
+    Endpoint, EndpointId, SecretKey, address_lookup::dns::DnsAddressLookup, dns::DnsResolver,
+    endpoint::default_relay_mode, protocol::Router,
 };
 use iroh_n0des::ApiSecret;
 use iroh_proxy_utils::{ALPN as IROH_HTTP_CONNECT_ALPN, HttpProxyRequest, HttpProxyRequestKind};
@@ -16,7 +16,7 @@ use iroh_proxy_utils::{
     downstream::{DownstreamProxy, EndpointAuthority, ProxyMode},
     upstream::{AuthError, AuthHandler, UpstreamProxy},
 };
-use iroh_relay::dns::{DnsProtocol, DnsResolver};
+use iroh_relay::dns::DnsProtocol;
 use n0_error::{AnyError, Result, StackResultExt, StdResultExt, stack_error};
 use n0_future::{IterExt, StreamExt, task::AbortOnDropHandle};
 use tokio::{
@@ -95,10 +95,12 @@ impl ListenNode {
                 async move {
                     loop {
                         let metrics = endpoint.metrics();
-                        let recv_total = metrics.magicsock.recv_data_ipv4.get()
-                            + metrics.magicsock.recv_data_ipv6.get()
-                            + metrics.magicsock.recv_data_relay.get();
-                        let send_total = metrics.magicsock.send_data.get();
+                        let recv_total = metrics.socket.recv_data_ipv4.get()
+                            + metrics.socket.recv_data_ipv6.get()
+                            + metrics.socket.recv_data_relay.get();
+                        let send_total = metrics.socket.send_ipv4.get()
+                            + metrics.socket.send_ipv6.get()
+                            + metrics.socket.send_relay.get();
                         let update = MetricsUpdate {
                             send: send_total,
                             recv: recv_total,
@@ -448,23 +450,23 @@ impl OutboundProxyHandle {
 /// Build a new iroh endpoint, applying all relevant details from Configuration
 /// to the base endpoint setup
 pub(crate) async fn build_endpoint(secret_key: SecretKey, common: &Config) -> Result<Endpoint> {
-    let mut builder = match common.discovery_mode {
-        crate::config::DiscoveryMode::Dns => {
+    let mut builder = match common.address_lookup {
+        crate::config::AddressLookupMode::Dns => {
             Endpoint::empty_builder(default_relay_mode()).secret_key(secret_key)
         }
-        crate::config::DiscoveryMode::Default | crate::config::DiscoveryMode::Hybrid => {
+        crate::config::AddressLookupMode::Default | crate::config::AddressLookupMode::Hybrid => {
             Endpoint::builder().secret_key(secret_key)
         }
     };
     if let Some(addr) = common.ipv4_addr {
-        builder = builder.bind_addr_v4(addr);
+        builder = builder.bind_addr(addr)?;
     }
     if let Some(addr) = common.ipv6_addr {
-        builder = builder.bind_addr_v6(addr);
+        builder = builder.bind_addr(addr)?;
     }
-    match common.discovery_mode {
-        crate::config::DiscoveryMode::Default => {}
-        crate::config::DiscoveryMode::Dns | crate::config::DiscoveryMode::Hybrid => {
+    match common.address_lookup {
+        crate::config::AddressLookupMode::Default => {}
+        crate::config::AddressLookupMode::Dns | crate::config::AddressLookupMode::Hybrid => {
             let origin = match &common.dns_origin {
                 Some(origin) => origin.clone(),
                 None => n0_error::bail_any!(
@@ -477,7 +479,7 @@ pub(crate) async fn build_endpoint(secret_key: SecretKey, common: &Config) -> Re
                     .build();
                 builder = builder.dns_resolver(resolver);
             }
-            builder = builder.discovery(DnsDiscovery::builder(origin));
+            builder = builder.address_lookup(DnsAddressLookup::builder(origin));
         }
     }
     let endpoint = builder.bind().await?;

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum DiscoveryMode {
+pub enum AddressLookupMode {
     #[default]
     /// Use the built-in n0des discovery defaults.
     Default,
@@ -36,7 +36,7 @@ pub struct Config {
 
     /// How the gateway resolves endpoint connection details.
     #[serde(default)]
-    pub discovery_mode: DiscoveryMode,
+    pub address_lookup: AddressLookupMode,
 
     /// DNS origin domain used for _iroh.<z32-endpoint-id>.<origin> lookups.
     ///

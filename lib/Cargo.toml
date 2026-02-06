@@ -26,7 +26,6 @@ n0-future.workspace = true
 open.workspace = true
 openidconnect.workspace = true
 postcard.workspace = true
-quinn.workspace = true
 rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
@@ -41,8 +40,6 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
-iroh-blobs = "0.97.0"
-httparse = "1.10.1"
 ttl_cache = "0.5.1"
 askama = "0.15.1"
 k8s-openapi = { version = "0.26.1", features = ["v1_30"] }

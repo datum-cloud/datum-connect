@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use http_body_util::BodyExt;
 use hyper::{Request, StatusCode, client::conn::http2};
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use iroh::{Endpoint, discovery::static_provider::StaticProvider};
+use iroh::{Endpoint, address_lookup::MemoryLookup};
 use n0_error::{Result, StdResultExt};
 use n0_future::task::AbortOnDropHandle;
 use n0_tracing_test::traced_test;
@@ -15,11 +15,11 @@ use tokio::{
 use crate::{Advertisment, ListenNode, ProxyState, Repo, TcpProxyData, gateway};
 
 #[derive(Default)]
-struct TestDiscovery(StaticProvider);
+struct TestAddressLookup(MemoryLookup);
 
-impl TestDiscovery {
+impl TestAddressLookup {
     fn add(&self, endpoint: &Endpoint) {
-        endpoint.discovery().add(self.0.clone());
+        endpoint.address_lookup().add(self.0.clone());
         self.0.add_endpoint_info(endpoint.addr());
     }
 }
@@ -27,7 +27,7 @@ impl TestDiscovery {
 #[tokio::test]
 #[traced_test]
 async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
-    let discovery = TestDiscovery::default();
+    let discovery = TestAddressLookup::default();
 
     let n0des_endpoint = Endpoint::bind().await?;
     discovery.add(&n0des_endpoint);
@@ -86,7 +86,7 @@ async fn gateway_end_to_end_to_upstream_http() -> Result<()> {
 #[tokio::test]
 #[traced_test]
 async fn gateway_forward_connect_tunnel() -> Result<()> {
-    let discovery = TestDiscovery::default();
+    let discovery = TestAddressLookup::default();
 
     let n0des_endpoint = Endpoint::bind().await?;
     discovery.add(&n0des_endpoint);
@@ -158,7 +158,7 @@ async fn gateway_forward_connect_tunnel() -> Result<()> {
 #[tokio::test]
 #[traced_test]
 async fn gateway_forward_h2c_requests_are_stable() -> Result<()> {
-    let discovery = TestDiscovery::default();
+    let discovery = TestAddressLookup::default();
 
     let n0des_endpoint = Endpoint::bind().await?;
     discovery.add(&n0des_endpoint);
@@ -234,7 +234,7 @@ async fn gateway_forward_h2c_requests_are_stable() -> Result<()> {
 #[tokio::test]
 #[traced_test]
 async fn gateway_forward_h2c_handles_closed_origin_connections() -> Result<()> {
-    let discovery = TestDiscovery::default();
+    let discovery = TestAddressLookup::default();
 
     let n0des_endpoint = Endpoint::bind().await?;
     discovery.add(&n0des_endpoint);

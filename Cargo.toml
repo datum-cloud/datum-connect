@@ -8,7 +8,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-iroh-proxy-utils = { git = "https://github.com/n0-computer/iroh-proxy-utils", branch = "main" }
+iroh-proxy-utils = { git = "https://github.com/n0-computer/iroh-proxy-utils", branch = "deps/iroh-096" }
 lib = { path = "lib" }
 arc-swap = "1.8.0"
 axum = "0.7"
@@ -21,17 +21,16 @@ snafu = "0.8.6"
 hex = "0.4.3"
 hyper = "1"
 hyper-util = { version = "0.1.19", features = ["full"] }
-iroh = { version = "0.95", default-features = false }
-iroh-base = { version = "0.95" }
-iroh-tickets = "0.2"
+iroh = { version = "0.96", default-features = false }
+iroh-relay = { version = "0.96", default-features = false }
+iroh-base = { version = "0.96" }
+iroh-tickets = "0.3"
 iroh-metrics = "0.38"
-iroh-n0des = { version = "0.8", features = ["tickets"] }
-iroh-relay = { version = "0.95" }
+iroh-n0des = { version = "0.9", features = ["tickets"] }
 log = "0.4"
 open = "5"
 openidconnect = "4.0.1"
 postcard = "1"
-quinn = { version = "0.14", package = "iroh-quinn" }
 rand = "0.9"
 reqwest = { version = "0.12", features = ["rustls-tls", "json"] }
 serde = { version = "1", features = ["derive"] }
