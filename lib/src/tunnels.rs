@@ -227,11 +227,10 @@ impl TunnelService {
                     &tunnel.endpoint,
                     &tunnel.label,
                     tunnel.enabled,
-                ) {
-                    if let Err(err) = self.listen.set_proxy_state(proxy_state).await {
+                )
+                    && let Err(err) = self.listen.set_proxy_state(proxy_state).await {
                         warn!(tunnel_id = %tunnel.id, "Failed to store proxy state: {err:#}");
                     }
-                }
             }
         }
 
@@ -404,8 +403,8 @@ impl TunnelService {
             .await
             .std_context("Failed to update HTTPProxy")?;
 
-        if let Ok(existing_ad) = ads.get_opt(tunnel_id).await {
-            if existing_ad.is_some() {
+        if let Ok(existing_ad) = ads.get_opt(tunnel_id).await
+            && existing_ad.is_some() {
                 let ad_patch = json!({
                     "spec": advertisement_spec(&connector_name, target)
                 });
@@ -413,7 +412,6 @@ impl TunnelService {
                     .await
                     .std_context("Failed to update ConnectorAdvertisement")?;
             }
-        }
 
         let enabled = ads
             .get_opt(tunnel_id)
@@ -443,18 +441,16 @@ impl TunnelService {
             ),
         };
 
-        if !self.publish_tickets {
-            if let Ok(proxy_state) = proxy_state_from_summary(
+        if !self.publish_tickets
+            && let Ok(proxy_state) = proxy_state_from_summary(
                 &summary.id,
                 &summary.endpoint,
                 &summary.label,
                 summary.enabled,
-            ) {
-                if let Err(err) = self.listen.set_proxy_state(proxy_state).await {
+            )
+                && let Err(err) = self.listen.set_proxy_state(proxy_state).await {
                     warn!(tunnel_id = %summary.id, "Failed to store proxy state: {err:#}");
                 }
-            }
-        }
 
         Ok(summary)
     }
@@ -548,18 +544,16 @@ impl TunnelService {
             ),
         };
 
-        if !self.publish_tickets {
-            if let Ok(proxy_state) = proxy_state_from_summary(
+        if !self.publish_tickets
+            && let Ok(proxy_state) = proxy_state_from_summary(
                 &summary.id,
                 &summary.endpoint,
                 &summary.label,
                 summary.enabled,
-            ) {
-                if let Err(err) = self.listen.set_proxy_state(proxy_state).await {
+            )
+                && let Err(err) = self.listen.set_proxy_state(proxy_state).await {
                     warn!(tunnel_id = %summary.id, "Failed to store proxy state: {err:#}");
                 }
-            }
-        }
 
         Ok(summary)
     }
@@ -642,11 +636,10 @@ impl TunnelService {
                 .await
                 .std_context("Failed to list remaining ConnectorAdvertisements")?;
             for ad in ads_list.items {
-                if let Some(name) = ad.metadata.name.clone() {
-                    if let Err(err) = ads.delete(&name, &DeleteParams::default()).await {
+                if let Some(name) = ad.metadata.name.clone()
+                    && let Err(err) = ads.delete(&name, &DeleteParams::default()).await {
                         warn!(%name, "Failed to delete connector advertisement: {err:#}");
                     }
-                }
             }
 
             if connectors
@@ -702,8 +695,8 @@ impl TunnelService {
                 .and_then(|details| details.public_key.as_ref())
                 .map(|details| details.id.as_str() != endpoint_id.as_str())
                 .unwrap_or(true);
-            if needs_patch {
-                if let Some(details) = build_connection_details(&self.listen) {
+            if needs_patch
+                && let Some(details) = build_connection_details(&self.listen) {
                     let details_value = serde_json::to_value(details)
                         .std_context("Failed to serialize connection details")?;
                     let patch = json!({ "status": { "connectionDetails": details_value } });
@@ -726,7 +719,6 @@ impl TunnelService {
                             .std_context("Failed to reload connector after patch")?;
                     }
                 }
-            }
             return Ok(Some(connector));
         }
         if list.items.len() > 1 {
@@ -857,13 +849,11 @@ fn normalize_endpoint(endpoint: &str) -> String {
 }
 
 fn strip_scheme(endpoint: &str) -> String {
-    if let Ok(url) = url::Url::parse(endpoint) {
-        if let Some(host) = url.host_str() {
-            if let Some(port) = url.port() {
+    if let Ok(url) = url::Url::parse(endpoint)
+        && let Some(host) = url.host_str()
+            && let Some(port) = url.port() {
                 return format!("{host}:{port}");
             }
-        }
-    }
     endpoint.to_string()
 }
 

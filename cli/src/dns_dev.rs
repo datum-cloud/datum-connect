@@ -57,8 +57,8 @@ pub async fn serve(
         let mut interval = time::interval(reload_interval);
         loop {
             interval.tick().await;
-            if let Ok(modified) = fs::metadata(&config_path).and_then(|m| m.modified()) {
-                if modified > last_modified {
+            if let Ok(modified) = fs::metadata(&config_path).and_then(|m| m.modified())
+                && modified > last_modified {
                     match build_catalog(&config_path, &origin) {
                         Ok(new_catalog) => {
                             catalog.replace(new_catalog).await;
@@ -69,7 +69,6 @@ pub async fn serve(
                         }
                     }
                 }
-            }
         }
     });
 

@@ -28,7 +28,7 @@ pub fn ProxiesList() -> Element {
     let state_for_future = state.clone();
     use_future(move || {
         let state_for_future = state_for_future.clone();
-        let mut has_loaded_for_future = has_loaded.clone();
+        let mut has_loaded_for_future = has_loaded;
         async move {
             let mut ctx_rx = state_for_future.datum().selected_context_watch();
             let refresh = state_for_future.tunnel_refresh();
@@ -135,7 +135,7 @@ pub fn ProxiesList() -> Element {
 
     let mut dialog_open = use_signal(|| false);
     let mut editing_tunnel = use_signal(|| None::<TunnelSummary>);
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
 
     let show_search = tunnels().len() > 2;
     let query = search_query().trim().to_lowercase();
@@ -218,7 +218,7 @@ pub fn ProxiesList() -> Element {
             }
         }
     } else {
-        let tunnel_to_delete_for_cards = tunnel_to_delete.clone();
+        let tunnel_to_delete_for_cards = tunnel_to_delete;
         rsx! {
             div { class: "space-y-5",
                 if show_search {
@@ -237,7 +237,7 @@ pub fn ProxiesList() -> Element {
                         tunnel,
                         show_view_item: true,
                         show_bandwidth: false,
-                        tunnel_to_delete: tunnel_to_delete_for_cards.clone(),
+                        tunnel_to_delete: tunnel_to_delete_for_cards,
                         on_delete: on_delete_handler,
                         on_edit: move |t| {
                             editing_tunnel.set(Some(t));

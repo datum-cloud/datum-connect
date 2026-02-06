@@ -59,7 +59,7 @@ enum Route {
 
 fn main() {
     init_tracing();
-    if let Some(path) = dotenv::dotenv().ok() {
+    if let Ok(path) = dotenv::dotenv() {
         info!("Loaded environment variables from {}", path.display());
     }
 
@@ -175,7 +175,7 @@ fn App() -> Element {
     }
 
     // Signal bumped on login/logout so title bar and other auth-dependent UI re-render.
-    let mut auth_changed = use_signal(|| 0u32);
+    let auth_changed = use_signal(|| 0u32);
     provide_context(auth_changed);
 
     rsx! {

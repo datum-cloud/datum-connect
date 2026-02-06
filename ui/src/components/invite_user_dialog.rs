@@ -13,7 +13,7 @@ use crate::{
 #[component]
 pub fn InviteUserDialog(open: ReadSignal<bool>, on_open_change: EventHandler<bool>) -> Element {
     let state = consume_context::<AppState>();
-    let mut email = use_signal(|| String::new());
+    let mut email = use_signal(String::new);
 
     // Get selected context (org and project)
     let selected_context = use_memo(move || state.selected_context());

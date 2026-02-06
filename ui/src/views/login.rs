@@ -11,7 +11,7 @@ use crate::{
 pub fn Login() -> Element {
     let nav = use_navigator();
     let state = consume_context::<AppState>();
-    let mut auth_changed = consume_context::<Signal<u32>>();
+    let auth_changed = consume_context::<Signal<u32>>();
     use_effect(move || {
         if state.datum().login_state() == LoginState::Valid {
             if state.selected_context().is_some() {

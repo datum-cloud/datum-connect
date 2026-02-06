@@ -136,7 +136,7 @@ impl ListenNode {
     }
 
     pub fn proxies(&self) -> Vec<ProxyState> {
-        self.state.get().proxies.iter().cloned().collect()
+        self.state.get().proxies.to_vec()
     }
 
     pub fn proxy_by_id(&self, id: &str) -> Option<ProxyState> {

@@ -79,14 +79,14 @@ pub fn SelectProject() -> Element {
 
     let save_and_nav = {
         let state = state.clone();
-        let nav = nav.clone();
-        let orgs = orgs.clone();
-        let saving = saving.clone();
-        let save_error = save_error.clone();
+        let nav = nav;
+        let orgs = orgs;
+        let saving = saving;
+        let save_error = save_error;
         Rc::new(move |org_id: String, project_id: String| {
             let orgs_snapshot = orgs.read().clone();
-            let mut saving = saving.clone();
-            let mut save_error = save_error.clone();
+            let mut saving = saving;
+            let mut save_error = save_error;
             saving.set(true);
             save_error.set(None);
 
@@ -118,9 +118,9 @@ pub fn SelectProject() -> Element {
 
             spawn({
                 let state = state.clone();
-                let nav = nav.clone();
-                let mut saving = saving.clone();
-                let mut save_error = save_error.clone();
+                let nav = nav;
+                let mut saving = saving;
+                let mut save_error = save_error;
                 async move {
                     if let Err(err) = state.set_selected_context(Some(ctx)).await {
                         save_error.set(Some(err.to_string()));

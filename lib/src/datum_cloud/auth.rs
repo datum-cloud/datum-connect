@@ -10,8 +10,8 @@ use arc_swap::ArcSwap;
 use chrono::Utc;
 use n0_error::{Result, StackResultExt, StdResultExt, anyerr, stack_error};
 use openidconnect::{
-    AccessToken, AccessTokenHash, AdditionalClaims, AuthorizationCode, ClientId, ClientSecret,
-    CsrfToken, GenderClaim, IdTokenClaims, IssuerUrl, Nonce, NonceVerifier, OAuth2TokenResponse,
+    AccessToken, AccessTokenHash, AuthorizationCode, ClientId, ClientSecret,
+    CsrfToken, IssuerUrl, Nonce, NonceVerifier, OAuth2TokenResponse,
     PkceCodeChallenge, RefreshToken, Scope, TokenResponse,
     core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata},
 };

@@ -60,8 +60,8 @@ pub fn AddTunnelDialog(
     /// Called after a successful save so the parent can refresh the tunnels list.
     on_save_success: EventHandler<()>,
 ) -> Element {
-    let mut address = use_signal(|| String::new());
-    let mut label = use_signal(|| String::new());
+    let mut address = use_signal(String::new);
+    let mut label = use_signal(String::new);
 
     // Reset form when dialog closes (after success or cancel) so next open starts clean
     use_effect(move || {
@@ -98,7 +98,7 @@ pub fn AddTunnelDialog(
             .project_id;
         let tunnel = state
             .tunnel_service()
-            .create_active(&label().trim(), &address().trim())
+            .create_active(label().trim(), address().trim())
             .await
             .context("Failed to create tunnel")?;
         state.upsert_tunnel(tunnel);
@@ -112,7 +112,7 @@ pub fn AddTunnelDialog(
     let mut save_proxy = use_action(move |existing: Option<ProxyState>| async move {
         let state = consume_context::<AppState>();
         let service =
-            TcpProxyData::from_host_port_str(&address().trim()).context("Invalid address")?;
+            TcpProxyData::from_host_port_str(address().trim()).context("Invalid address")?;
         let proxy = match existing {
             Some(proxy) => {
                 let info = Advertisment {
@@ -148,7 +148,7 @@ pub fn AddTunnelDialog(
         let state = consume_context::<AppState>();
         let updated = state
             .tunnel_service()
-            .update_active(&tunnel_id, &label().trim(), &address().trim())
+            .update_active(&tunnel_id, label().trim(), address().trim())
             .await
             .context("Failed to update tunnel")?;
         state.upsert_tunnel(updated);

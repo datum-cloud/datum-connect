@@ -136,7 +136,7 @@ impl ErrorResponder for ErrorResponseWriter {
             _ => "The service experienced an unexpected error.",
         };
         let html = GatewayErrorTemplate {
-            body: &body,
+            body,
             title: &title,
         }
         .render()

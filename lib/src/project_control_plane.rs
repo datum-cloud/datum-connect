@@ -101,11 +101,10 @@ impl ProjectControlPlaneClient {
         let mut login_rx = self.datum.auth().login_state_watch();
         let mut auth_update_rx = self.datum.auth_update_watch();
         let task = tokio::spawn(async move {
-            if *login_rx.borrow() != LoginState::Missing {
-                if let Err(err) = client.refresh_client_from_update().await {
+            if *login_rx.borrow() != LoginState::Missing
+                && let Err(err) = client.refresh_client_from_update().await {
                     warn!("failed to refresh project control plane client: {err:#}");
                 }
-            }
             loop {
                 tokio::select! {
                     res = login_rx.changed() => {
@@ -119,11 +118,10 @@ impl ProjectControlPlaneClient {
                         }
                     }
                 }
-                if *login_rx.borrow() != LoginState::Missing {
-                    if let Err(err) = client.refresh_client_from_update().await {
+                if *login_rx.borrow() != LoginState::Missing
+                    && let Err(err) = client.refresh_client_from_update().await {
                         warn!("failed to refresh project control plane client: {err:#}");
                     }
-                }
             }
         });
         self._auth_task = Some(Arc::new(AbortOnDropHandle::new(task)));

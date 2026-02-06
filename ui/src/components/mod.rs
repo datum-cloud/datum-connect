@@ -17,7 +17,7 @@ pub use button::Button;
 pub use button::ButtonKind;
 pub use delete_tunnel_dialog::DeleteTunnelDialog;
 pub use head::Head;
-pub use icon::{Icon, IconKind, IconSource};
+pub use icon::{Icon, IconSource};
 pub use invite_user_dialog::InviteUserDialog;
 pub use splash::Splash;
 #[allow(unused)]

@@ -160,7 +160,7 @@ pub fn Sidebar() -> Element {
 pub fn HeaderBar() -> Element {
     let window = || consume_context::<DesktopContext>();
     let state = consume_context::<AppState>();
-    let mut auth_changed = consume_context::<Signal<u32>>();
+    let auth_changed = consume_context::<Signal<u32>>();
     let _ = auth_changed();
     let auth_state = state.datum().auth_state();
     let nav = use_navigator();
@@ -219,7 +219,7 @@ pub fn HeaderBar() -> Element {
         Err(_) => None,
     };
     let mut logout = use_action(move |_: ()| {
-        let mut auth_changed = auth_changed.clone();
+        let mut auth_changed = auth_changed;
         async move {
             let state = consume_context::<AppState>();
             state.datum().auth().logout().await?;
