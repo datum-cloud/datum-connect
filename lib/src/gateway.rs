@@ -105,8 +105,8 @@ struct GatewayErrorTemplate<'a> {
 struct ErrorResponseWriter;
 
 impl ErrorResponder for ErrorResponseWriter {
-    async fn error_response<'a>(
-        &'a self,
+    async fn error_response(
+        &self,
         status: StatusCode,
     ) -> hyper::Response<BoxBody<Bytes, io::Error>> {
         let title = format!(

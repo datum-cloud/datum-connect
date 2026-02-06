@@ -13,6 +13,7 @@ pub enum IconKind {
 /// Icons loaded from `ui/assets/icons/<name>.svg`. Use `currentColor` in the SVG for styling.
 #[derive(Clone, PartialEq)]
 pub enum IconSource {
+    #[allow(unused)]
     Kind(IconKind),
     /// Name of the SVG file in assets/icons (without .svg), e.g. "plus", "check".
     Named(String),

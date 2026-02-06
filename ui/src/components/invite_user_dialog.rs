@@ -43,7 +43,7 @@ pub fn InviteUserDialog(open: ReadSignal<bool>, on_open_change: EventHandler<boo
     // Placeholder for invite action - can be implemented later
     let mut invite_user = use_action(move |_| async move {
         let state = consume_context::<AppState>();
-        let ctx = state.selected_context().context("No project selected")?;
+        let _ctx = state.selected_context().context("No project selected")?;
 
         // TODO: Implement actual invite API call using:
         // - ctx.org_id

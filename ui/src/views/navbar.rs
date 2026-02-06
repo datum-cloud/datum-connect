@@ -22,6 +22,7 @@ use open::that;
 /// Provided by Sidebar so child routes (e.g. TunnelBandwidth) can open the Add/Edit tunnel dialog.
 #[derive(Clone)]
 pub struct OpenEditTunnelDialog {
+    #[allow(unused)]
     pub editing_proxy: Signal<Option<lib::ProxyState>>,
     pub editing_tunnel: Signal<Option<lib::TunnelSummary>>,
     pub dialog_open: Signal<bool>,

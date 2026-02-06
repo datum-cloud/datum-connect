@@ -249,11 +249,6 @@ pub fn ProxiesList() -> Element {
         }
     };
 
-    let tunnel_name_for_dialog = tunnel_pending_delete()
-        .as_ref()
-        .map(|t| t.label.clone())
-        .unwrap_or_default();
-
     rsx! {
         div { class: "max-w-5xl mx-auto", {list} }
         AddTunnelDialog {

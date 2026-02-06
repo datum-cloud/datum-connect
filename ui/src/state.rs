@@ -49,6 +49,7 @@ impl AppState {
         &self.heartbeat
     }
 
+    #[allow(unused)]
     pub async fn project_control_plane(
         &self,
     ) -> n0_error::Result<Option<ProjectControlPlaneClient>> {

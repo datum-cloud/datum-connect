@@ -227,10 +227,10 @@ impl TunnelService {
                     &tunnel.endpoint,
                     &tunnel.label,
                     tunnel.enabled,
-                )
-                    && let Err(err) = self.listen.set_proxy_state(proxy_state).await {
-                        warn!(tunnel_id = %tunnel.id, "Failed to store proxy state: {err:#}");
-                    }
+                ) && let Err(err) = self.listen.set_proxy_state(proxy_state).await
+                {
+                    warn!(tunnel_id = %tunnel.id, "Failed to store proxy state: {err:#}");
+                }
             }
         }
 
@@ -404,14 +404,15 @@ impl TunnelService {
             .std_context("Failed to update HTTPProxy")?;
 
         if let Ok(existing_ad) = ads.get_opt(tunnel_id).await
-            && existing_ad.is_some() {
-                let ad_patch = json!({
-                    "spec": advertisement_spec(&connector_name, target)
-                });
-                ads.patch(tunnel_id, &PatchParams::default(), &Patch::Merge(&ad_patch))
-                    .await
-                    .std_context("Failed to update ConnectorAdvertisement")?;
-            }
+            && existing_ad.is_some()
+        {
+            let ad_patch = json!({
+                "spec": advertisement_spec(&connector_name, target)
+            });
+            ads.patch(tunnel_id, &PatchParams::default(), &Patch::Merge(&ad_patch))
+                .await
+                .std_context("Failed to update ConnectorAdvertisement")?;
+        }
 
         let enabled = ads
             .get_opt(tunnel_id)
@@ -448,9 +449,10 @@ impl TunnelService {
                 &summary.label,
                 summary.enabled,
             )
-                && let Err(err) = self.listen.set_proxy_state(proxy_state).await {
-                    warn!(tunnel_id = %summary.id, "Failed to store proxy state: {err:#}");
-                }
+            && let Err(err) = self.listen.set_proxy_state(proxy_state).await
+        {
+            warn!(tunnel_id = %summary.id, "Failed to store proxy state: {err:#}");
+        }
 
         Ok(summary)
     }
@@ -474,7 +476,6 @@ impl TunnelService {
             .await
             .std_context("Failed to fetch HTTPProxy")?;
         let endpoint = normalize_endpoint(&proxy_backend_endpoint(&proxy).unwrap_or_default());
-        let hostnames = proxy.spec.hostnames.clone().unwrap_or_default();
         let label = proxy
             .metadata
             .annotations
@@ -551,9 +552,10 @@ impl TunnelService {
                 &summary.label,
                 summary.enabled,
             )
-                && let Err(err) = self.listen.set_proxy_state(proxy_state).await {
-                    warn!(tunnel_id = %summary.id, "Failed to store proxy state: {err:#}");
-                }
+            && let Err(err) = self.listen.set_proxy_state(proxy_state).await
+        {
+            warn!(tunnel_id = %summary.id, "Failed to store proxy state: {err:#}");
+        }
 
         Ok(summary)
     }
@@ -637,9 +639,10 @@ impl TunnelService {
                 .std_context("Failed to list remaining ConnectorAdvertisements")?;
             for ad in ads_list.items {
                 if let Some(name) = ad.metadata.name.clone()
-                    && let Err(err) = ads.delete(&name, &DeleteParams::default()).await {
-                        warn!(%name, "Failed to delete connector advertisement: {err:#}");
-                    }
+                    && let Err(err) = ads.delete(&name, &DeleteParams::default()).await
+                {
+                    warn!(%name, "Failed to delete connector advertisement: {err:#}");
+                }
             }
 
             if connectors
@@ -695,30 +698,29 @@ impl TunnelService {
                 .and_then(|details| details.public_key.as_ref())
                 .map(|details| details.id.as_str() != endpoint_id.as_str())
                 .unwrap_or(true);
-            if needs_patch
-                && let Some(details) = build_connection_details(&self.listen) {
-                    let details_value = serde_json::to_value(details)
-                        .std_context("Failed to serialize connection details")?;
-                    let patch = json!({ "status": { "connectionDetails": details_value } });
-                    if let Err(err) = connectors
-                        .patch_status(
-                            &connector.name_any(),
-                            &PatchParams::default(),
-                            &Patch::Merge(&patch),
-                        )
+            if needs_patch && let Some(details) = build_connection_details(&self.listen) {
+                let details_value = serde_json::to_value(details)
+                    .std_context("Failed to serialize connection details")?;
+                let patch = json!({ "status": { "connectionDetails": details_value } });
+                if let Err(err) = connectors
+                    .patch_status(
+                        &connector.name_any(),
+                        &PatchParams::default(),
+                        &Patch::Merge(&patch),
+                    )
+                    .await
+                {
+                    warn!(
+                        connector = %connector.name_any(),
+                        "Failed to patch connector status: {err:#}"
+                    );
+                } else {
+                    connector = connectors
+                        .get(&connector.name_any())
                         .await
-                    {
-                        warn!(
-                            connector = %connector.name_any(),
-                            "Failed to patch connector status: {err:#}"
-                        );
-                    } else {
-                        connector = connectors
-                            .get(&connector.name_any())
-                            .await
-                            .std_context("Failed to reload connector after patch")?;
-                    }
+                        .std_context("Failed to reload connector after patch")?;
                 }
+            }
             return Ok(Some(connector));
         }
         if list.items.len() > 1 {
@@ -851,9 +853,10 @@ fn normalize_endpoint(endpoint: &str) -> String {
 fn strip_scheme(endpoint: &str) -> String {
     if let Ok(url) = url::Url::parse(endpoint)
         && let Some(host) = url.host_str()
-            && let Some(port) = url.port() {
-                return format!("{host}:{port}");
-            }
+        && let Some(port) = url.port()
+    {
+        return format!("{host}:{port}");
+    }
     endpoint.to_string()
 }
 

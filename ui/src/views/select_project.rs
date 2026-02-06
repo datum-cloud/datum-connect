@@ -79,10 +79,6 @@ pub fn SelectProject() -> Element {
 
     let save_and_nav = {
         let state = state.clone();
-        let nav = nav;
-        let orgs = orgs;
-        let saving = saving;
-        let save_error = save_error;
         Rc::new(move |org_id: String, project_id: String| {
             let orgs_snapshot = orgs.read().clone();
             let mut saving = saving;

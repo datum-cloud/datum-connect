@@ -6,6 +6,7 @@ use dioxus_primitives::select::{
 
 /// Alignment of the select list relative to the trigger (start = left, end = right, center = centered).
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(unused)]
 pub enum SelectAlign {
     Start,
     Center,
