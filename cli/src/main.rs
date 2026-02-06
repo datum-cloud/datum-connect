@@ -148,6 +148,9 @@ pub struct ServeArgs {
     pub bind_addr: IpAddr,
     #[clap(long, default_value = "8080")]
     pub port: u16,
+    /// Unix socket path to listen on instead of a TCP address.
+    #[clap(long, conflicts_with_all = ["bind_addr", "port"])]
+    pub unix_socket: Option<PathBuf>,
     /// Discovery mode for connection details.
     #[clap(long, value_enum)]
     pub discovery: Option<DiscoveryModeArg>,
@@ -291,7 +294,6 @@ async fn main() -> n0_error::Result<()> {
             handle.abort();
         }
         Commands::Gateway(args) => {
-            let bind_addr: SocketAddr = (args.bind_addr, args.port).into();
             let secret_key = repo.gateway_key().await?;
             let mut config = repo.gateway_config().await?;
             if let Some(discovery) = args.discovery {
@@ -307,9 +309,18 @@ async fn main() -> n0_error::Result<()> {
             if let Some(resolver) = args.dns_resolver {
                 config.common.dns_resolver = Some(resolver);
             }
-            println!("serving on port {bind_addr}");
+            let serve = async {
+                if let Some(path) = args.unix_socket.as_ref() {
+                    println!("serving on unix socket {}", path.display());
+                    lib::gateway::bind_and_serve_unix(secret_key, config, path).await
+                } else {
+                    let bind_addr: SocketAddr = (args.bind_addr, args.port).into();
+                    println!("serving on port {bind_addr}");
+                    lib::gateway::bind_and_serve(secret_key, config, bind_addr).await
+                }
+            };
             tokio::select! {
-                res = lib::gateway::bind_and_serve(secret_key, config, bind_addr) => res?,
+                res = serve => res?,
                 _ = tokio::signal::ctrl_c() => {}
             }
         }
