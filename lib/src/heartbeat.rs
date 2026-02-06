@@ -96,9 +96,10 @@ impl HeartbeatAgent {
         let mut projects_rx = this.inner.datum.orgs_projects_watch();
         let task = tokio::spawn(async move {
             if *login_rx.borrow() != LoginState::Missing
-                && let Err(err) = this.refresh_projects().await {
-                    warn!("heartbeat: bootstrap failed: {err:#}");
-                }
+                && let Err(err) = this.refresh_projects().await
+            {
+                warn!("heartbeat: bootstrap failed: {err:#}");
+            }
             loop {
                 tokio::select! {
                     res = login_rx.changed() => {

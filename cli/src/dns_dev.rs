@@ -58,17 +58,18 @@ pub async fn serve(
         loop {
             interval.tick().await;
             if let Ok(modified) = fs::metadata(&config_path).and_then(|m| m.modified())
-                && modified > last_modified {
-                    match build_catalog(&config_path, &origin) {
-                        Ok(new_catalog) => {
-                            catalog.replace(new_catalog).await;
-                            last_modified = modified;
-                        }
-                        Err(err) => {
-                            warn!("failed to reload dns dev config: {err:#}");
-                        }
+                && modified > last_modified
+            {
+                match build_catalog(&config_path, &origin) {
+                    Ok(new_catalog) => {
+                        catalog.replace(new_catalog).await;
+                        last_modified = modified;
+                    }
+                    Err(err) => {
+                        warn!("failed to reload dns dev config: {err:#}");
                     }
                 }
+            }
         }
     });
 
