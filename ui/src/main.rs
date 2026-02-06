@@ -1,11 +1,10 @@
 use dioxus::prelude::*;
+#[cfg(feature = "desktop")]
+use n0_error::Result;
 use std::sync::OnceLock;
 use tracing::info;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-#[cfg(feature = "desktop")]
-use n0_error::Result;
-
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::components::{Head, Splash};
 use crate::state::AppState;
@@ -73,7 +72,10 @@ fn main() {
     #[cfg(feature = "desktop")]
     {
         // Use a custom titlebar so we can theme the top chrome (height + color).
-        use dioxus_desktop::{Config, LogicalSize, WindowBuilder, WindowCloseBehaviour, tao::platform::macos::WindowBuilderExtMacOS};
+        use dioxus_desktop::{
+            tao::platform::macos::WindowBuilderExtMacOS, Config, LogicalSize, WindowBuilder,
+            WindowCloseBehaviour,
+        };
 
         dioxus::LaunchBuilder::desktop()
             .with_cfg(desktop! {
@@ -101,14 +103,16 @@ fn main() {
 fn init_tracing() {
     let repo_path = lib::Repo::default_location();
     if let Err(err) = std::fs::create_dir_all(&repo_path) {
-        eprintln!("ui: failed to create repo dir {}: {err}", repo_path.display());
+        eprintln!(
+            "ui: failed to create repo dir {}: {err}",
+            repo_path.display()
+        );
     }
     let file_appender = tracing_appender::rolling::never(&repo_path, "ui.log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     let _ = LOG_GUARD.set(guard);
 
-    let filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt::layer().with_writer(std::io::stderr))
@@ -149,7 +153,7 @@ fn App() -> Element {
                 }
             });
         });
-        
+
         // Also apply decorations when app state becomes ready (window should be ready by then)
         use_effect(move || {
             if app_state_ready() {
@@ -275,11 +279,11 @@ fn window_icon() -> dioxus_desktop::tao::window::Icon {
 /// Custom Objective-C class to handle menu actions
 #[cfg(all(feature = "desktop", target_os = "macos"))]
 mod macos_menu_handler {
+    use objc2::rc::Retained;
     use objc2::runtime::NSObject;
     use objc2::{define_class, extern_methods};
-    use objc2_foundation::{NSObject as FoundationNSObject, NSString, NSURL};
     use objc2_app_kit::NSWorkspace;
-    use objc2::rc::Retained;
+    use objc2_foundation::{NSObject as FoundationNSObject, NSString, NSURL};
 
     define_class!(
         #[unsafe(super(FoundationNSObject))]
@@ -319,12 +323,12 @@ mod macos_menu_handler {
 /// Set the macOS menu bar app name and add custom menu items.
 #[cfg(all(feature = "desktop", target_os = "macos"))]
 fn set_macos_menu_name() {
-    use std::ffi::CStr;
-    use std::sync::Once;
     use objc2::runtime::Sel;
     use objc2::{ClassType, MainThreadMarker};
     use objc2_app_kit::{NSApplication, NSMenuItem};
     use objc2_foundation::NSString;
+    use std::ffi::CStr;
+    use std::sync::Once;
 
     // SAFETY: We're on the main thread (called from use_effect in the UI)
     let mtm = unsafe { MainThreadMarker::new_unchecked() };
@@ -360,8 +364,8 @@ fn set_macos_menu_name() {
                     unsafe {
                         let about_sel =
                             Sel::register(CStr::from_bytes_with_nul(b"openAboutURL:\0").unwrap());
-                        let about_item =
-                            app_submenu.insertItemWithTitle_action_keyEquivalent_atIndex(
+                        let about_item = app_submenu
+                            .insertItemWithTitle_action_keyEquivalent_atIndex(
                                 &about_title,
                                 Some(about_sel),
                                 &empty_key,
@@ -379,13 +383,14 @@ fn set_macos_menu_name() {
                         app_submenu.insertItem_atIndex(&separator, 1);
                     }
 
-                    // Add "Check for Updates..." 
+                    // Add "Check for Updates..."
                     let updates_title = NSString::from_str("Check for Updates...");
                     unsafe {
-                        let updates_sel =
-                            Sel::register(CStr::from_bytes_with_nul(b"checkForUpdates:\0").unwrap());
-                        let updates_item =
-                            app_submenu.insertItemWithTitle_action_keyEquivalent_atIndex(
+                        let updates_sel = Sel::register(
+                            CStr::from_bytes_with_nul(b"checkForUpdates:\0").unwrap(),
+                        );
+                        let updates_item = app_submenu
+                            .insertItemWithTitle_action_keyEquivalent_atIndex(
                                 &updates_title,
                                 Some(updates_sel),
                                 &empty_key,
@@ -407,11 +412,11 @@ fn set_macos_menu_name() {
 /// even if called repeatedly.
 #[cfg(all(feature = "desktop", target_os = "macos"))]
 fn set_macos_window_decorations() {
-    use std::ffi::CStr;
+    use objc2::runtime::AnyClass;
     use objc2::MainThreadMarker;
     use objc2_app_kit::NSApplication;
     use objc2_foundation::NSString;
-    use objc2::runtime::AnyClass;
+    use std::ffi::CStr;
 
     // SAFETY: We're on the main thread (called from use_effect in the UI)
     let mtm = unsafe { MainThreadMarker::new_unchecked() };
@@ -420,62 +425,65 @@ fn set_macos_window_decorations() {
     let app = NSApplication::sharedApplication(mtm);
     unsafe {
         let app_ref: &NSApplication = app.as_ref();
-        let ns_window: Option<objc2::rc::Retained<objc2::runtime::NSObject>> = 
+        let ns_window: Option<objc2::rc::Retained<objc2::runtime::NSObject>> =
             objc2::msg_send![app_ref, mainWindow];
-        
+
         if let Some(ns_window) = ns_window {
             let ns_window_ref: &objc2::runtime::NSObject = ns_window.as_ref();
-            
+
             // Check if window is ready by verifying it has a content view
             // This helps ensure the window is fully initialized
-            let content_view: Option<objc2::rc::Retained<objc2::runtime::NSObject>> = 
+            let content_view: Option<objc2::rc::Retained<objc2::runtime::NSObject>> =
                 objc2::msg_send![ns_window_ref, contentView];
-            
+
             if content_view.is_none() {
                 // Window not ready yet, will be retried
                 return;
             }
-            
-            // Set window background color FIRST (affects titlebar area when transparent)
+
+            let content_view = content_view.unwrap();
+            let content_view_ref: &objc2::runtime::NSObject = content_view.as_ref();
+
+            // Make titlebar transparent FIRST so we can customize it
+            let _: () = objc2::msg_send![ns_window_ref, setTitlebarAppearsTransparent: true];
+
+            // Set background color on the contentView instead of the window
+            // This is more reliable as it directly affects what's visible
             // Using #efefed - glacier-mist-800
-            // Converted hex to sRGB: (239/255, 239/255, 237/255) = (0.937, 0.937, 0.929)
             let color_class_name = CStr::from_bytes_with_nul(b"NSColor\0").unwrap();
             let color_class = AnyClass::get(color_class_name).expect("NSColor class should exist");
             // #efefed converts to sRGB(239/255, 239/255, 237/255)
-            let custom_color: objc2::rc::Retained<objc2::runtime::NSObject> = 
-                objc2::msg_send![color_class, colorWithSRGBRed: 239.0/255.0, green: 239.0/255.0, blue: 237.0/255.0, alpha: 1.0f64];
+            let custom_color: objc2::rc::Retained<objc2::runtime::NSObject> = objc2::msg_send![color_class, colorWithSRGBRed: 239.0/255.0, green: 239.0/255.0, blue: 237.0/255.0, alpha: 1.0f64];
             let custom_color_ref: &objc2::runtime::NSObject = custom_color.as_ref();
+
+            // Set background color on contentView (more reliable than window)
+            let _: () = objc2::msg_send![content_view_ref, setWantsLayer: true];
+            let _: () = objc2::msg_send![content_view_ref, setBackgroundColor: custom_color_ref];
+
+            // Also set on window as fallback
             let _: () = objc2::msg_send![ns_window_ref, setBackgroundColor: custom_color_ref];
-            
-            // Make titlebar transparent so we can customize it (do this before setting appearance)
-            let _: () = objc2::msg_send![ns_window_ref, setTitlebarAppearsTransparent: true];
-            
+
             // Hide the title (since we have custom controls)
             // NSWindowTitleHidden = 1
             let _: () = objc2::msg_send![ns_window_ref, setTitleVisibility: 1u64];
-            
+
             // Set the window's appearance AFTER background color and transparency
             // Use light appearance (NSAppearanceNameAqua) since our background is light
             // This ensures the window controls and titlebar elements render correctly
             let appearance_class_name = CStr::from_bytes_with_nul(b"NSAppearance\0").unwrap();
-            let appearance_class = AnyClass::get(appearance_class_name).expect("NSAppearance class should exist");
+            let appearance_class =
+                AnyClass::get(appearance_class_name).expect("NSAppearance class should exist");
             let appearance_name = NSString::from_str("NSAppearanceNameAqua");
             let appearance_name_ref: &NSString = appearance_name.as_ref();
-            let appearance: objc2::rc::Retained<objc2::runtime::NSObject> = 
+            let appearance: objc2::rc::Retained<objc2::runtime::NSObject> =
                 objc2::msg_send![appearance_class, appearanceNamed: appearance_name_ref];
             let appearance_ref: &objc2::runtime::NSObject = appearance.as_ref();
             let _: () = objc2::msg_send![ns_window_ref, setAppearance: appearance_ref];
-            
-            // Force the window to update its appearance and redraw
+
+            // Force the window and content view to update their appearance and redraw
+            let _: () = objc2::msg_send![content_view_ref, setNeedsDisplay: true];
             let _: () = objc2::msg_send![ns_window_ref, invalidateShadow];
             let _: () = objc2::msg_send![ns_window_ref, display];
-            
-            // Also update the content view to ensure changes propagate
-            if let Some(content_view) = content_view {
-                let content_view_ref: &objc2::runtime::NSObject = content_view.as_ref();
-                let _: () = objc2::msg_send![content_view_ref, setNeedsDisplay: true];
-            }
         }
     }
 }
-
