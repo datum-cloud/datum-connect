@@ -5,8 +5,8 @@ use dioxus_primitives::switch::{self, SwitchProps, SwitchThumbProps};
 pub fn Switch(props: SwitchProps) -> Element {
     rsx! {
         switch::Switch {
-            class: "group relative w-10 h-5.5 rounded-full bg-switch-disabled
-                    transition-colors duration-150 data-[state=checked]:bg-switch-checked 
+            class: "group relative w-10 h-5.5 rounded-full bg-switch-disabled cursor-pointer
+                    transition-colors duration-150 data-[state=checked]:bg-switch-checked
                     data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50 px-[1.70px] focus:outline-2 focus:outline-app-border",
             checked: props.checked,
             default_checked: props.default_checked,

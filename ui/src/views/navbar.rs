@@ -221,7 +221,7 @@ pub fn AppHeader(props: AppHeaderProps) -> Element {
                                 default_open: false,
                                 on_open_change: move |v| profile_menu_open.set(Some(v)),
                                 disabled: use_signal(|| false),
-                                DropdownMenuTrigger { class: "flex items-center gap-2 cursor-default focus:outline-2 focus:outline-app-border/50 hover:opacity-80 transition-opacity",
+                                DropdownMenuTrigger { class: "flex items-center gap-2 cursor-pointer focus:outline-2 focus:outline-app-border/50 hover:opacity-80 transition-opacity",
                                     span { class: "text-sm text-foreground font-medium",
                                         "{user_name}"
                                     }
