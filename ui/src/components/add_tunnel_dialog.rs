@@ -218,6 +218,7 @@ pub fn AddTunnelDialog(
                             text: if save_tunnel.pending() || save_create_tunnel.pending() { submit_pending_label.to_string() } else { submit_label.to_string() },
                         }
                         Button {
+                            class: Some("cursor-pointer".to_string()),
                             kind: ButtonKind::Ghost,
                             onclick: move |_| on_open_change.call(false),
                             text: "Cancel",

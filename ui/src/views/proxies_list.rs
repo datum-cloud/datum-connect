@@ -495,7 +495,7 @@ pub fn TunnelCard(
                             default_open: false,
                             on_open_change: move |v| menu_open.set(Some(v)),
                             disabled: is_disabled,
-                            DropdownMenuTrigger { class: if is_disabled() { "w-8 h-8 rounded-lg border border-app-border text-foreground/50 flex items-center justify-center bg-transparent opacity-70 cursor-not-allowed pointer-events-none" } else { "w-8 h-8 rounded-lg border border-app-border text-foreground/60 flex items-center justify-center bg-transparent focus:outline-2 focus:outline-app-border/50" },
+                            DropdownMenuTrigger { class: if is_disabled() { "w-8 h-8 rounded-lg border border-app-border text-foreground/50 flex items-center justify-center bg-transparent opacity-70 cursor-not-allowed pointer-events-none" } else { "w-8 h-8 rounded-lg border border-app-border text-foreground/60 flex items-center justify-center bg-transparent focus:outline-2 focus:outline-app-border/50 cursor-pointer" },
                                 Icon {
                                     source: IconSource::Named("ellipsis".into()),
                                     size: 16,

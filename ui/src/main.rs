@@ -101,6 +101,7 @@ fn main() {
                     // Make "close" behave like hide, so the tray icon can restore it.
                     .with_close_behaviour(WindowCloseBehaviour::WindowHides)
                     .with_window(window_builder)
+                    .with_menu(None)
             })
             .launch(App);
     }
