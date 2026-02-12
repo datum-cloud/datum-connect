@@ -31,6 +31,7 @@ const DEFAULT_CONNECTOR_CLASS_NAME: &str = "datum-connect";
 const CONNECTOR_SELECTOR_FIELD: &str = "status.connectionDetails.publicKey.id";
 const ADVERTISEMENT_CONNECTOR_FIELD: &str = "spec.connectorRef.name";
 const DISPLAY_NAME_ANNOTATION: &str = "app.kubernetes.io/name";
+const DEVICE_NAME_ANNOTATION: &str = "app.kubernetes.io/device-name";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TunnelSummary {
@@ -41,6 +42,7 @@ pub struct TunnelSummary {
     pub enabled: bool,
     pub accepted: bool,
     pub programmed: bool,
+    pub device_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -193,6 +195,12 @@ impl TunnelService {
                 .and_then(|labels| labels.get(DISPLAY_NAME_ANNOTATION))
                 .cloned()
                 .unwrap_or_else(|| name.clone());
+            let device_name = proxy
+                .metadata
+                .annotations
+                .as_ref()
+                .and_then(|annotations| annotations.get(DEVICE_NAME_ANNOTATION))
+                .cloned();
             let endpoint = normalize_endpoint(&proxy_backend_endpoint(&proxy).unwrap_or_default());
             let hostnames = proxy_hostnames(&proxy);
             let accepted = condition_is_true(
@@ -218,6 +226,7 @@ impl TunnelService {
                 enabled,
                 accepted,
                 programmed,
+                device_name,
             });
         }
         if !self.publish_tickets {
@@ -259,16 +268,21 @@ impl TunnelService {
             endpoint = %endpoint,
             "creating HTTPProxy"
         );
+        let device_name = get_device_name();
+        let mut annotations = BTreeMap::from([
+            (DISPLAY_NAME_ANNOTATION.to_string(), label.to_string()),
+            (
+                CONNECTOR_NAME_ANNOTATION.to_string(),
+                connector_name.clone(),
+            ),
+        ]);
+        if let Some(ref device) = device_name {
+            annotations.insert(DEVICE_NAME_ANNOTATION.to_string(), device.clone());
+        }
         let mut proxy = HTTPProxy {
             metadata: ObjectMeta {
                 generate_name: Some("tunnel-".to_string()),
-                annotations: Some(BTreeMap::from([
-                    (DISPLAY_NAME_ANNOTATION.to_string(), label.to_string()),
-                    (
-                        CONNECTOR_NAME_ANNOTATION.to_string(),
-                        connector_name.clone(),
-                    ),
-                ])),
+                annotations: Some(annotations),
                 ..Default::default()
             },
             spec: HTTPProxySpec {
@@ -360,6 +374,7 @@ impl TunnelService {
                     .and_then(|status| status.conditions.as_deref()),
                 HTTP_PROXY_CONDITION_PROGRAMMED,
             ),
+            device_name: device_name.clone(),
         })
     }
 
@@ -420,6 +435,13 @@ impl TunnelService {
             .std_context("Failed to load ConnectorAdvertisement")?
             .is_some();
 
+        let device_name = existing
+            .metadata
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.get(DEVICE_NAME_ANNOTATION))
+            .cloned();
+
         let summary = TunnelSummary {
             id: tunnel_id.to_string(),
             label: label.to_string(),
@@ -440,6 +462,7 @@ impl TunnelService {
                     .and_then(|status| status.conditions.as_deref()),
                 HTTP_PROXY_CONDITION_PROGRAMMED,
             ),
+            device_name,
         };
 
         if !self.publish_tickets
@@ -483,6 +506,12 @@ impl TunnelService {
             .and_then(|labels| labels.get(DISPLAY_NAME_ANNOTATION))
             .cloned()
             .unwrap_or_else(|| tunnel_id.to_string());
+        let device_name = proxy
+            .metadata
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.get(DEVICE_NAME_ANNOTATION))
+            .cloned();
 
         if enabled {
             let target = parse_target(&endpoint)?;
@@ -543,6 +572,7 @@ impl TunnelService {
                     .and_then(|status| status.conditions.as_deref()),
                 HTTP_PROXY_CONDITION_PROGRAMMED,
             ),
+            device_name,
         };
 
         if !self.publish_tickets
@@ -928,4 +958,80 @@ fn publish_tickets_enabled() -> bool {
     std::env::var("DATUM_CONNECT_PUBLISH_TICKETS")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
+}
+
+/// Get a friendly device name for the current machine.
+/// Returns something like "John's MacBook Pro" or "hostname (Linux)".
+fn get_device_name() -> Option<String> {
+    let hostname = gethostname::gethostname().to_string_lossy().to_string();
+    
+    #[cfg(target_os = "macos")]
+    {
+        // First, try to get the Computer Name (user-friendly name set in System Preferences)
+        if let Ok(output) = std::process::Command::new("scutil")
+            .arg("--get")
+            .arg("ComputerName")
+            .output()
+        {
+            let computer_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !computer_name.is_empty() && computer_name != hostname {
+                // Use ComputerName directly - it's already user-friendly and may already include the user's name
+                return Some(computer_name);
+            }
+        }
+        
+        // Fallback: try to get device model and convert to friendly name
+        if let Ok(output) = std::process::Command::new("sysctl")
+            .arg("-n")
+            .arg("hw.model")
+            .output()
+        {
+            let model = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            // Convert model identifier to friendly name (e.g., "MacBookPro18,1" -> "MacBook Pro")
+            let friendly_model = if model.starts_with("MacBookPro") {
+                "MacBook Pro"
+            } else if model.starts_with("MacBookAir") {
+                "MacBook Air"
+            } else if model.starts_with("Macmini") {
+                "Mac mini"
+            } else if model.starts_with("MacPro") {
+                "Mac Pro"
+            } else if model.starts_with("iMac") {
+                "iMac"
+            } else if model.starts_with("MacStudio") {
+                "Mac Studio"
+            } else {
+                &model
+            };
+            
+            // Try to get the user's full name
+            if let Ok(output) = std::process::Command::new("id")
+                .arg("-F")
+                .output()
+            {
+                let full_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !full_name.is_empty() && full_name != hostname {
+                    return Some(format!("{}'s {}", full_name, friendly_model));
+                }
+            }
+            
+            // Fallback to hostname + model
+            return Some(format!("{} ({})", hostname, friendly_model));
+        }
+        // Fallback if all commands fail
+        return Some(format!("{} (macOS)", hostname));
+    }
+    
+    // For other platforms, use hostname + OS
+    #[cfg(not(target_os = "macos"))]
+    {
+        let os_name = if cfg!(target_os = "linux") {
+            "Linux"
+        } else if cfg!(target_os = "windows") {
+            "Windows"
+        } else {
+            "Unknown"
+        };
+        return Some(format!("{} ({})", hostname, os_name));
+    }
 }

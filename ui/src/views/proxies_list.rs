@@ -439,6 +439,15 @@ pub fn TunnelCard(
                             }
                             span { class: "text-xs text-foreground", {proxy_name} }
                         }
+                        if let Some(device_name) = tunnel.device_name.as_ref() {
+                            div { class: "flex items-center gap-2.5 text-icon-tunnel",
+                                Icon {
+                                    source: IconSource::Named("power-cable".into()),
+                                    size: 14,
+                                }
+                                span { class: "text-xs text-foreground/70", {device_name.clone()} }
+                            }
+                        }
                         div { class: "flex items-center gap-2.5 text-icon-tunnel",
                             Icon {
                                 source: IconSource::Named("down-right-arrow".into()),
