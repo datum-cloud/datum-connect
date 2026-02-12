@@ -964,7 +964,7 @@ fn publish_tickets_enabled() -> bool {
 /// Returns something like "John's MacBook Pro" or "hostname (Linux)".
 fn get_device_name() -> Option<String> {
     let hostname = gethostname::gethostname().to_string_lossy().to_string();
-    
+
     #[cfg(target_os = "macos")]
     {
         // First, try to get the Computer Name (user-friendly name set in System Preferences)
@@ -979,7 +979,7 @@ fn get_device_name() -> Option<String> {
                 return Some(computer_name);
             }
         }
-        
+
         // Fallback: try to get device model and convert to friendly name
         if let Ok(output) = std::process::Command::new("sysctl")
             .arg("-n")
@@ -1003,25 +1003,22 @@ fn get_device_name() -> Option<String> {
             } else {
                 &model
             };
-            
+
             // Try to get the user's full name
-            if let Ok(output) = std::process::Command::new("id")
-                .arg("-F")
-                .output()
-            {
+            if let Ok(output) = std::process::Command::new("id").arg("-F").output() {
                 let full_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !full_name.is_empty() && full_name != hostname {
                     return Some(format!("{}'s {}", full_name, friendly_model));
                 }
             }
-            
+
             // Fallback to hostname + model
             return Some(format!("{} ({})", hostname, friendly_model));
         }
         // Fallback if all commands fail
         return Some(format!("{} (macOS)", hostname));
     }
-    
+
     // For other platforms, use hostname + OS
     #[cfg(not(target_os = "macos"))]
     {
